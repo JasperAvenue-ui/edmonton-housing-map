@@ -642,13 +642,58 @@ function showPanel(prop) {
     </div>
     <div class="pb" style="flex:1;">
       <div class="pb-title">Community reports</div>
-      <div class="rep-empty">No verified reports yet for this address.</div>
+      <div id="reportsLog">
+        <div class="rep-empty" style="font-size:12px;color:var(--gray-400);">Loading reports…</div>
+      </div>
       <span class="rep-link" onclick="openReport()">+ Report your situation at this address</span>
     </div>
   `;
 
   document.getElementById('panel').classList.add('open');
   document.getElementById('legend').classList.add('panel-open');
+
+  // Load community reports for this property
+  loadReports(prop);
+}
+
+async function loadReports(prop) {
+  const logEl = document.getElementById('reportsLog');
+  if (!logEl) return;
+
+  // Query approved submissions for this address
+  const { data, error } = await sb
+    .from('submissions')
+    .select('*')
+    .eq('approved', true)
+    .ilike('civic_address', prop.civic_address)
+    .order('submitted_at', { ascending: false });
+
+  if (error || !data || data.length === 0) {
+    logEl.innerHTML = '<div class="rep-empty">No verified reports yet for this address.</div>';
+    return;
+  }
+
+  logEl.innerHTML = data.map(s => {
+    const date = new Date(s.submitted_at).toLocaleDateString('en-CA', { year: 'numeric', month: 'short', day: 'numeric' });
+    const status = s.reported_status === 'rental' ? 'Rental unit'
+      : s.reported_status === 'owner-occupied' ? 'Owner-occupied'
+      : s.reported_status === 'owner-renting' ? 'Owner renting to others'
+      : 'Status unknown';
+    const landlord = s.landlord_type === 'corporate' ? 'Corporate landlord'
+      : s.landlord_type === 'individual' ? 'Private landlord'
+      : '';
+
+    return \`<div style="padding:8px 0;border-bottom:1px solid var(--gray-100);">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+        <div style="font-size:12px;color:var(--gray-700);font-weight:500;">\${status}</div>
+        <div style="font-size:10px;color:var(--gray-400);white-space:nowrap;">\${date}</div>
+      </div>
+      \${landlord ? \`<div style="font-size:11px;color:var(--gray-400);margin-top:2px;">\${landlord}\${s.company_name ? ' — ' + s.company_name : ''}</div>\` : ''}
+      \${s.monthly_rent ? \`<div style="font-size:12px;font-weight:600;color:var(--blue);margin-top:4px;background:#dbeafe;display:inline-block;padding:2px 8px;border-radius:4px;">$\${s.monthly_rent.toLocaleString()}/mo</div>\` : ''}
+      \${s.notes ? \`<div style="font-size:11px;color:var(--gray-600);margin-top:4px;font-style:italic;">"\${s.notes}"</div>\` : ''}
+      <div style="font-size:10px;color:var(--gray-400);margin-top:3px;">Source: Community report</div>
+    </div>\`;
+  }).join('');
 }
 
 function closePanel() {

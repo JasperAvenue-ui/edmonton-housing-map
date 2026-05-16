@@ -590,6 +590,17 @@ async function approve(id) {
     });
   }
 
+  // Link submission back to property
+  const { data: newProp } = await sb
+    .from('properties')
+    .select('id')
+    .ilike('civic_address', sub.civic_address)
+    .limit(1);
+
+  if (newProp && newProp.length > 0) {
+    await sb.from('submissions').update({ property_id: newProp[0].id }).eq('id', id);
+  }
+
   resultEl.textContent = lat ? '✓ Approved — pin added to map' : '✓ Approved — no coordinates found, pin needs manual review';
   resultEl.className = 'action-result ok';
   setTimeout(() => loadAll(), 800);

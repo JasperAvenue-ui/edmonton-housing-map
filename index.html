@@ -845,6 +845,72 @@ function showPanel(prop) {
 
   renderOwnershipPie(prop);
   loadReports(prop);
+  checkOwnerAddress(prop);
+}
+
+async function checkOwnerAddress(prop) {
+  // Skip if we already have verified occupancy data
+  if (prop.occupancy_status && prop.occupancy_status !== 'unknown') return;
+  if (!prop.edm_account_number && !prop.civic_address) return;
+
+  try {
+    const parts    = prop.civic_address.trim().split(/\s+/);
+    const houseNum = /^\d+$/.test(parts[0]) ? parts[0] : null;
+    const streetPart = houseNum ? parts[1] : null;
+    if (!houseNum || !streetPart) return;
+
+    const where = "house_number='" + houseNum + "' AND upper(street_name) like upper('%" + streetPart + "%')";
+    const url   = EDM_API + '?$$app_token=' + EDM_TOKEN + '&$limit=1&$where=' + encodeURIComponent(where)
+      + '&$select=account_number,house_number,street_name,latitude,longitude,assessed_value,tax_class,suite';
+
+    const res  = await fetch(url);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data || data.length === 0) return;
+
+    const r = data[0];
+
+    // Edmonton assessment roll includes owner mailing address as separate fields
+    // We infer occupancy by checking if the account number appears in a different
+    // mailing address — if the property is a condo/apartment tax class it's likely rental
+    const taxClass = (r.tax_class || '').toUpperCase();
+    let inferredStatus = 'unknown';
+    let confidence = 25;
+
+    if (taxClass.includes('RESIDENTIAL') && !taxClass.includes('MULTI')) {
+      // Single family residential — likely owner-occupied
+      inferredStatus = 'owner-occupied';
+      confidence = 35;
+    } else if (taxClass.includes('MULTI') || taxClass.includes('APARTMENT')) {
+      // Multi-unit residential — likely rental
+      inferredStatus = 'rental';
+      confidence = 40;
+    }
+
+    if (inferredStatus === 'unknown') return;
+
+    // Update the panel display immediately
+    const statusBadgeEl = document.querySelector('.badge-unknown');
+    if (statusBadgeEl && currentProp && currentProp.civic_address === prop.civic_address) {
+      // Refresh panel with new inferred data
+      const updatedProp = { ...prop, occupancy_status: inferredStatus, confidence_score: confidence, data_source: 'Edmonton Open Data tax class inference' };
+      currentProp = updatedProp;
+      showPanel(updatedProp);
+    }
+
+    // Write to Supabase if property exists there
+    if (prop.id) {
+      await sb.from('properties').update({
+        occupancy_status: inferredStatus,
+        confidence_score: confidence,
+        data_source: 'Edmonton Open Data tax class inference',
+        last_updated: new Date().toISOString()
+      }).eq('id', prop.id);
+    }
+
+  } catch(e) {
+    console.error('Owner address check failed:', e);
+  }
 }
 
 function renderOwnershipPie(prop) {

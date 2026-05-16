@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>About — Edmonton Housing Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy:  #0b1929;
+    --amber: #f59e0b;
+    --gray:  #9ca3af;
+    --white: #f9fafb;
+    --line:  rgba(255,255,255,0.08);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--navy); color: var(--white); font-family: 'IBM Plex Sans', sans-serif; font-size: 16px; line-height: 1.7; min-height: 100vh; }
+  nav { position: sticky; top: 0; z-index: 100; background: rgba(11,25,41,0.96); backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); padding: 0 32px; display: flex; align-items: center; justify-content: space-between; height: 56px; }
+  .nav-logo { font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 600; color: var(--amber); text-transform: uppercase; letter-spacing: 0.08em; text-decoration: none; }
+  nav a.back { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: rgba(255,255,255,0.5); text-decoration: none; letter-spacing: 0.04em; }
+  nav a.back:hover { color: var(--white); }
+  main { max-width: 680px; margin: 0 auto; padding: 72px 32px 96px; }
+  .tag { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--amber); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 20px; }
+  h1 { font-family: 'IBM Plex Mono', monospace; font-size: 28px; font-weight: 600; line-height: 1.3; margin-bottom: 40px; }
+  h2 { font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; color: var(--amber); text-transform: uppercase; letter-spacing: 0.08em; margin: 48px 0 16px; }
+  p { color: rgba(255,255,255,0.75); margin-bottom: 16px; }
+  p:last-child { margin-bottom: 0; }
+  ul { list-style: none; margin-bottom: 16px; }
+  ul li { color: rgba(255,255,255,0.75); padding: 10px 0; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 3px; }
+  ul li:last-child { border-bottom: none; }
+  .source-name { color: var(--white); font-weight: 500; }
+  .source-desc { font-size: 14px; color: var(--gray); }
+  a { color: var(--amber); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  hr { border: none; border-top: 1px solid var(--line); margin: 48px 0; }
+  .meta { font-size: 14px; color: var(--gray); }
+  footer { border-top: 1px solid var(--line); padding: 24px 32px; text-align: center; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--gray); }
+</style>
+</head>
+<body>
+<nav>
+  <a href="/" class="nav-logo">Edmonton Housing Map</a>
+  <a href="/" class="back">← Back to map</a>
+</nav>
+<main>
+  <div class="tag">About this project</div>
+  <h1>Edmonton Housing<br>Transparency Map</h1>
+  <p>This map was built by a citizen using publicly available data and <a href="https://claude.ai" target="_blank">Claude</a> (Anthropic's AI assistant). The goal is to visualize the split between rental and owner-occupied housing across Edmonton — and to show how much of the rental stock is controlled by corporations rather than individual landlords.</p>
+  <p>By combining Edmonton's municipal property assessment data with corporate regulatory filings and citizen reports, the map lets you see your neighbourhood's housing breakdown at a glance: who owns what, whether it's rented or owner-occupied, and which properties belong to publicly traded real estate companies.</p>
+  <h2>How it was built</h2>
+  <p>The app was built entirely through a conversational development process with Claude — writing the frontend, backend, database schema, and data processing scripts through back-and-forth dialogue with the AI.</p>
+  <p>Corporate property addresses were gathered from TSX regulatory filings (Annual Information Forms on SEDAR+) and from each company's public rental listings website. Addresses were then matched against Edmonton's municipal property assessment database to place pins on the map. Unmatched addresses are queued for manual review using Google Maps coordinates.</p>
+  <p>The app is hosted on <a href="https://vercel.com" target="_blank">Vercel</a> with a <a href="https://supabase.com" target="_blank">Supabase</a> backend for citizen submissions and verified property data. The full Edmonton property dataset (391,487 properties) is served as a static JSON file.</p>
+  <h2>Data sources</h2>
+  <ul>
+    <li><span class="source-name">Edmonton Open Data — Property Assessment</span><span class="source-desc">Municipal property assessment roll with civic addresses, GPS coordinates, assessed value, and tax class for all Edmonton properties. <a href="https://data.edmonton.ca/City-Administration/Property-Assessment-Data-Current-Calendar-Year-/q7d6-ambg" target="_blank">data.edmonton.ca</a></span></li>
+    <li><span class="source-name">SEDAR+ — Annual Information Forms</span><span class="source-desc">Mandatory regulatory filings by TSX-listed REITs. Used for Boardwalk REIT (BEI.UN), Killam Apartment REIT (KMP.UN), CAPREIT (CAR.UN), and Northview Residential REIT (NRR.UN). <a href="https://www.sedarplus.ca" target="_blank">sedarplus.ca</a></span></li>
+    <li><span class="source-name">Mainstreet Equity Corp (MEQ) — mainst.biz</span><span class="source-desc">Property addresses gathered from the company's public website.</span></li>
+    <li><span class="source-name">Boardwalk REIT (BEI.UN) — bwalk.com</span><span class="source-desc">Edmonton rental listings used to identify property addresses.</span></li>
+    <li><span class="source-name">Killam Apartment REIT (KMP.UN) — killamreit.com</span><span class="source-desc">Edmonton rental listings combined with property schedule from 2025 Annual Information Form.</span></li>
+    <li><span class="source-name">Avenue Living — avenueliving.ca</span><span class="source-desc">Edmonton rental listings used to identify property addresses.</span></li>
+    <li><span class="source-name">Citizen submissions</span><span class="source-desc">Renters and residents can submit information about their building through the map. Submissions are reviewed by a moderator before being added to the public dataset.</span></li>
+  </ul>
+  <h2>Limitations</h2>
+  <p>This data is incomplete and may be out of date. Not all corporate landlords in Edmonton are represented. The ownership nationality percentages shown (Canadian / US / other) reflect the publicly disclosed investor base of each REIT as a whole, not individual property-level ownership. Properties not matched to a known corporate owner or verified by a citizen submission show as unknown. That does not mean they are privately owned, it means there is no data yet.</p>
+  <h2>Contributing</h2>
+  <p>If you rent in Edmonton, search your address and submit a report. If you spot an error in the corporate data, or know of a corporate landlord not yet listed, you can submit that through the map as well. All submissions are anonymous and reviewed before being published.</p>
+  <hr>
+  <p class="meta">Built with <a href="https://claude.ai" target="_blank">Claude</a> by Anthropic &middot; Deployed on <a href="https://vercel.com" target="_blank">Vercel</a> &middot; Database on <a href="https://supabase.com" target="_blank">Supabase</a> &middot; <a href="https://github.com/JasperAvenue-ui/edmonton-housing-map" target="_blank">GitHub</a></p>
+</main>
+<footer>Edmonton Housing Transparency Map — publicly available data, citizen built</footer>
+</body>
+</html>

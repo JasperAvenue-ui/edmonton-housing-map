@@ -6,6 +6,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Edmonton Housing Transparency Map</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -165,6 +167,20 @@
   .hm-pin .pin-body { width: 28px; height: 28px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); position: absolute; top: 0; left: 2px; border: 2.5px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.25); display: flex; align-items: center; justify-content: center; }
   .hm-pin .pin-letter { transform: rotate(45deg); font-size: 10px; font-weight: 700; color: white; font-family: 'IBM Plex Sans', system-ui, sans-serif; }
   .hm-pin .pin-shadow { position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); width: 12px; height: 4px; background: rgba(0,0,0,0.2); border-radius: 50%; }
+
+  .cluster-icon {
+    background: var(--navy);
+    border: 2.5px solid white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 600;
+    color: white;
+    font-size: 11px;
+  }
 </style>
 </head>
 <body>
@@ -308,6 +324,7 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 
@@ -328,9 +345,63 @@ L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
   maxZoom: 19
 }).addTo(map);
 
+clusterGroup = L.markerClusterGroup({
+  maxClusterRadius: 60,
+  iconCreateFunction: function(cluster) {
+    const markers = cluster.getAllChildMarkers();
+    const total   = markers.length;
+    const rentals = markers.filter(m => m.options.occupancyStatus === 'rental').length;
+    const owned   = markers.filter(m => m.options.occupancyStatus === 'owner-occupied').length;
+    const unknown = total - rentals - owned;
+
+    // Build mini pie SVG showing rental vs owner vs unknown
+    const size = total > 99 ? 44 : total > 9 ? 38 : 32;
+    const cx = size / 2, cy = size / 2, r = size / 2 - 3;
+
+    const segments = [
+      { count: rentals, color: '#2563eb' },
+      { count: owned,   color: '#dc2626' },
+      { count: unknown, color: '#9ca3af' }
+    ].filter(s => s.count > 0);
+
+    let pieSvg = '';
+    if (segments.length === 1) {
+      pieSvg = '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="' + segments[0].color + '"/>';
+    } else {
+      let startAngle = -Math.PI / 2;
+      segments.forEach(seg => {
+        const pct = seg.count / total;
+        const endAngle = startAngle + pct * 2 * Math.PI;
+        const x1 = (cx + r * Math.cos(startAngle)).toFixed(2);
+        const y1 = (cy + r * Math.sin(startAngle)).toFixed(2);
+        const x2 = (cx + r * Math.cos(endAngle)).toFixed(2);
+        const y2 = (cy + r * Math.sin(endAngle)).toFixed(2);
+        const large = pct > 0.5 ? 1 : 0;
+        pieSvg += '<path d="M' + cx + ',' + cy + ' L' + x1 + ',' + y1 + ' A' + r + ',' + r + ' 0 ' + large + ',1 ' + x2 + ',' + y2 + ' Z" fill="' + seg.color + '"/>';
+        startAngle = endAngle;
+      });
+    }
+
+    const svg = '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '" xmlns="http://www.w3.org/2000/svg">'
+      + pieSvg
+      + '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="white" stroke-width="2"/>'
+      + '<text x="' + cx + '" y="' + (cy + 4) + '" text-anchor="middle" font-size="' + (total > 99 ? 10 : 11) + '" font-weight="600" font-family="IBM Plex Mono,monospace" fill="white">' + total + '</text>'
+      + '</svg>';
+
+    return L.divIcon({
+      html: svg,
+      className: '',
+      iconSize: [size, size],
+      iconAnchor: [size/2, size/2]
+    });
+  }
+});
+clusterGroup.addTo(map);
+
 let currentProp  = null;
 let searchTimer  = null;
 let edmCache     = [];
+let clusterGroup = null;
 
 // ── LOAD ALL TRACKED PROPERTIES FROM SUPABASE ───────────
 async function loadProperties() {
@@ -433,9 +504,12 @@ function makeIcon(prop) {
   });
 }
 function addMarker(prop) {
-  L.marker([prop.lat, prop.lng], { icon: makeIcon(prop) })
-    .addTo(map)
-    .on('click', () => showPanel(prop));
+  const m = L.marker([prop.lat, prop.lng], {
+    icon: makeIcon(prop),
+    occupancyStatus: prop.occupancy_status
+  });
+  m.on('click', () => showPanel(prop));
+  clusterGroup.addLayer(m);
 }
 
 // ── SEARCH ───────────────────────────────────────────────

@@ -289,14 +289,7 @@
           <input type="text" id="rAddr" placeholder="e.g. 10011 107 St NW">
         </div>
         <div class="form-group">
-          <label>Neighbourhood</label>
-          <select id="rHood">
-            <option value="">Select…</option>
-            <option>Downtown</option><option>Oliver</option><option>Strathcona</option>
-            <option>Glenora</option><option>Ritchie</option><option>Garneau</option>
-            <option>Westmount</option><option>Boyle Street</option><option>Queen Mary Park</option>
-            <option>Ottewell</option><option>Millwoods</option><option>Other</option>
-          </select>
+          <input type="hidden" id="rHood" value="">
         </div>
       </div>
       <div class="form-group">
@@ -969,7 +962,10 @@ function closePanel() {
 
 // ── REPORT MODAL ─────────────────────────────────────────
 function openReport() {
-  if (currentProp) document.getElementById('rAddr').value = currentProp.civic_address || '';
+  if (currentProp) {
+    document.getElementById('rAddr').value = currentProp.civic_address || '';
+    document.getElementById('rHood').value = currentProp.neighbourhood || '';
+  }
   document.getElementById('reportModal').classList.add('visible');
 }
 function closeReport() {

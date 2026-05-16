@@ -378,88 +378,30 @@ L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
   maxZoom: 19
 }).addTo(map);
 
+// Cluster group used only at zoom 14+ for individual pins in viewport
+// Zoomed out view uses neighbourhood bubbles instead (see renderHoodBubbles)
 clusterGroup = L.markerClusterGroup({
-  maxClusterRadius: 60,
-  iconCreateFunction: function(cluster) {
-    const markers = cluster.getAllChildMarkers();
-    const total   = markers.length;
-    const rentals = markers.filter(m => m.options.occupancyStatus === 'rental').length;
-    const owned   = markers.filter(m => m.options.occupancyStatus === 'owner-occupied').length;
-    const unknown = total - rentals - owned;
-
-    // Build mini pie SVG showing rental vs owner vs unknown
-    const size = total > 99 ? 44 : total > 9 ? 38 : 32;
-    const cx = size / 2, cy = size / 2, r = size / 2 - 3;
-
-    const segments = [
-      { count: rentals, color: '#2563eb' },
-      { count: owned,   color: '#dc2626' },
-      { count: unknown, color: '#9ca3af' }
-    ].filter(s => s.count > 0);
-
-    let pieSvg = '';
-    if (segments.length === 1) {
-      pieSvg = '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="' + segments[0].color + '"/>';
-    } else {
-      let startAngle = -Math.PI / 2;
-      segments.forEach(seg => {
-        const pct = seg.count / total;
-        const endAngle = startAngle + pct * 2 * Math.PI;
-        const x1 = (cx + r * Math.cos(startAngle)).toFixed(2);
-        const y1 = (cy + r * Math.sin(startAngle)).toFixed(2);
-        const x2 = (cx + r * Math.cos(endAngle)).toFixed(2);
-        const y2 = (cy + r * Math.sin(endAngle)).toFixed(2);
-        const large = pct > 0.5 ? 1 : 0;
-        pieSvg += '<path d="M' + cx + ',' + cy + ' L' + x1 + ',' + y1 + ' A' + r + ',' + r + ' 0 ' + large + ',1 ' + x2 + ',' + y2 + ' Z" fill="' + seg.color + '"/>';
-        startAngle = endAngle;
-      });
-    }
-
-    const svg = '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '" xmlns="http://www.w3.org/2000/svg">'
-      + pieSvg
-      + '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="white" stroke-width="2"/>'
-      + '<text x="' + cx + '" y="' + (cy + 4) + '" text-anchor="middle" font-size="' + (total > 99 ? 10 : 11) + '" font-weight="600" font-family="IBM Plex Mono,monospace" fill="white">' + total + '</text>'
-      + (function() {
-          const flags = [{count: rentals, emoji: '🇨🇦'}, {count: owned, emoji: '🇺🇸'}, {count: unknown, emoji: '🌍'}].filter(f => f.count > 0);
-          if (flags.length <= 1) return '';
-          let flagSvg = ''; let fa = -Math.PI/2;
-          flags.forEach(f => {
-            const pct = f.count / total;
-            const midAngle = fa + pct * Math.PI;
-            const fr = r * 0.6;
-            const fx = (cx + fr * Math.cos(midAngle)).toFixed(1);
-            const fy = (cy + fr * Math.sin(midAngle) + 4).toFixed(1);
-            flagSvg += '<text x="' + fx + '" y="' + fy + '" text-anchor="middle" font-size="' + Math.max(8, size/5) + '">' + f.emoji + '</text>';
-            fa += pct * 2 * Math.PI;
-          });
-          return flagSvg;
-        })()
-      + '</svg>';
-
-    return L.divIcon({
-      html: svg,
-      className: '',
-      iconSize: [size, size],
-      iconAnchor: [size/2, size/2]
-    });
-  }
+  maxClusterRadius: 40,
+  disableClusteringAtZoom: 17
 });
 clusterGroup.addTo(map);
 
 
 
 // ── LOAD PROPERTIES ─────────────────────────────────────
-// Step 1: Load all Edmonton properties from static JSON file
-// Step 2: Overlay verified Supabase data on top
-
-let edmPropertyIndex = {}; // account_number -> supabase property data
+const ZOOM_THRESHOLD = 14; // below this = neighbourhood bubbles, above = individual pins
+let allProperties    = [];  // full dataset in memory
+let hoodSummaries    = {};  // neighbourhood -> {total, rentals, owned, unknown, lat, lng}
+let hoodLayers       = [];  // current neighbourhood bubble layers
+let edmPropertyIndex = {};  // account_number -> supabase verified data
+let dataLoaded       = false;
 
 async function loadProperties() {
   document.getElementById('emptyState').style.display = 'none';
   document.getElementById('loadingOverlay').style.display = 'block';
   document.getElementById('demoBanner').style.display = 'none';
 
-  // Load verified Supabase properties first (for overlay)
+  // Load verified Supabase data first
   const { data: verified } = await sb.from('properties').select('*');
   if (verified) {
     verified.forEach(p => {
@@ -468,73 +410,173 @@ async function loadProperties() {
     updateStats(verified);
   }
 
-  // Load static Edmonton property file
+  // Load static JSON
   try {
     document.getElementById('loadingMsg').textContent = 'Downloading property data…';
     const res  = await fetch('/edmonton-properties.json');
     const json = await res.json();
+    const cols = json.cols;
     const rows = json.rows;
-    const cols = json.cols; // ['id','addr','hood','lat','lng','type','val']
 
-    document.getElementById('loadingMsg').textContent = `Plotting ${rows.length.toLocaleString()} properties…`;
+    document.getElementById('loadingMsg').textContent = 'Processing ' + rows.length.toLocaleString() + ' properties…';
+    await new Promise(r => setTimeout(r, 0));
 
-    // Plot in chunks to keep UI responsive
-    const CHUNK = 5000;
+    // Build full property array and neighbourhood summaries
+    const CHUNK = 10000;
     for (let i = 0; i < rows.length; i += CHUNK) {
-      const chunk = rows.slice(i, i + CHUNK);
-      chunk.forEach(row => {
+      rows.slice(i, i + CHUNK).forEach(row => {
         const r = {};
         cols.forEach((c, idx) => r[c] = row[idx]);
-        if (!r.lat || !r.lng) return;
+        if (!r.lat || !r.lng || !r.addr) return;
 
-        // Merge with verified Supabase data if available
-        const verified = edmPropertyIndex[r.id] || null;
-        const prop = verified ? {
-          ...verified,
-          civic_address: r.addr,
-          neighbourhood: r.hood,
-          lat: r.lat, lng: r.lng,
-          tax_class: r.type,
-          assessed_value: r.val
+        const vData = edmPropertyIndex[r.id] || null;
+        const prop = vData ? {
+          ...vData,
+          civic_address: r.addr, neighbourhood: r.hood,
+          lat: r.lat, lng: r.lng, tax_class: r.type, assessed_value: r.val
         } : {
-          civic_address:    r.addr,
-          neighbourhood:    r.hood,
-          lat:              r.lat,
-          lng:              r.lng,
-          owner_type:       'unknown',
-          occupancy_status: 'unknown',
-          ownership_ca:     null,
-          ownership_us:     null,
-          ownership_other:  null,
+          civic_address: r.addr, neighbourhood: r.hood,
+          lat: r.lat, lng: r.lng,
+          owner_type: 'unknown', occupancy_status: 'unknown',
           confidence_score: 0,
-          data_source:      'Edmonton Open Data (unverified)',
-          edm_account_number: r.id,
-          assessed_value:   r.val,
-          tax_class:        r.type
+          data_source: 'Edmonton Open Data (unverified)',
+          edm_account_number: r.id, assessed_value: r.val, tax_class: r.type
         };
 
-        addMarker(prop);
+        allProperties.push(prop);
+
+        // Build neighbourhood summary
+        const hood = r.hood || 'Unknown';
+        if (!hoodSummaries[hood]) {
+          hoodSummaries[hood] = { total:0, rentals:0, owned:0, unknown:0, latSum:0, lngSum:0 };
+        }
+        const h = hoodSummaries[hood];
+        h.total++;
+        h.latSum += r.lat;
+        h.lngSum += r.lng;
+        if (vData && vData.occupancy_status === 'rental') h.rentals++;
+        else if (vData && vData.occupancy_status === 'owner-occupied') h.owned++;
+        else h.unknown++;
       });
 
-      // Update progress bar
       const pct = Math.round((i / rows.length) * 100);
       document.getElementById('loadingFill').style.width = pct + '%';
-      document.getElementById('loadingMsg').textContent = `Plotting ${Math.min(i + CHUNK, rows.length).toLocaleString()} of ${rows.length.toLocaleString()}…`;
-
-      // Yield to browser to keep UI responsive
+      document.getElementById('loadingMsg').textContent = 'Processing ' + Math.min(i+CHUNK, rows.length).toLocaleString() + ' of ' + rows.length.toLocaleString() + '…';
       await new Promise(r => setTimeout(r, 0));
     }
 
+    // Average neighbourhood coordinates
+    Object.keys(hoodSummaries).forEach(hood => {
+      const h = hoodSummaries[hood];
+      h.lat = h.latSum / h.total;
+      h.lng = h.lngSum / h.total;
+      delete h.latSum; delete h.lngSum;
+    });
+
+    dataLoaded = true;
     document.getElementById('loadingOverlay').style.display = 'none';
-    if (!verified || verified.length === 0) {
-      document.getElementById('demoBanner').style.display = 'block';
-    }
+
+    // Initial render based on current zoom
+    renderForZoom();
+
+    // Re-render on zoom change
+    map.on('zoomend moveend', renderForZoom);
 
   } catch(e) {
-    console.error('Failed to load property data:', e);
+    console.error('Failed to load:', e);
     document.getElementById('loadingOverlay').style.display = 'none';
     document.getElementById('emptyState').style.display = 'block';
   }
+}
+
+function renderForZoom() {
+  if (!dataLoaded) return;
+  const zoom = map.getZoom();
+
+  if (zoom < ZOOM_THRESHOLD) {
+    // Show neighbourhood bubbles
+    clusterGroup.clearLayers();
+    renderHoodBubbles();
+  } else {
+    // Show individual pins for current viewport only
+    clearHoodBubbles();
+    renderViewportPins();
+  }
+}
+
+// ── NEIGHBOURHOOD BUBBLES ────────────────────────────────
+function clearHoodBubbles() {
+  hoodLayers.forEach(l => map.removeLayer(l));
+  hoodLayers = [];
+}
+
+function renderHoodBubbles() {
+  clearHoodBubbles();
+  Object.entries(hoodSummaries).forEach(([hood, h]) => {
+    const total   = h.total;
+    const rentals = h.rentals;
+    const owned   = h.owned;
+    const unknown = h.unknown;
+
+    // Build pie SVG for bubble
+    const size = total > 5000 ? 56 : total > 1000 ? 48 : total > 200 ? 40 : 32;
+    const cx = size/2, cy = size/2, r = size/2 - 3;
+
+    const segs = [
+      {count: rentals, color: '#2563eb'},
+      {count: owned,   color: '#dc2626'},
+      {count: unknown, color: '#4b5563'}
+    ].filter(s => s.count > 0);
+
+    let pie = '';
+    if (segs.length === 0 || (segs.length === 1 && segs[0].count === total)) {
+      pie = '<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="'+(segs[0]?.color||'#4b5563')+'"/>';
+    } else {
+      let a = -Math.PI/2;
+      segs.forEach(s => {
+        const pct = s.count/total, ea = a + pct*2*Math.PI;
+        const x1=(cx+r*Math.cos(a)).toFixed(2), y1=(cy+r*Math.sin(a)).toFixed(2);
+        const x2=(cx+r*Math.cos(ea)).toFixed(2), y2=(cy+r*Math.sin(ea)).toFixed(2);
+        pie += '<path d="M'+cx+','+cy+' L'+x1+','+y1+' A'+r+','+r+' 0 '+(pct>0.5?1:0)+',1 '+x2+','+y2+' Z" fill="'+s.color+'"/>';
+        a = ea;
+      });
+    }
+
+    const fontSize = size < 40 ? 8 : size < 48 ? 9 : 10;
+    const label = total > 999 ? Math.round(total/1000)+'k' : total;
+    const svg = '<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'" xmlns="http://www.w3.org/2000/svg">'
+      + pie
+      + '<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="white" stroke-width="2"/>'
+      + '<text x="'+cx+'" y="'+(cy+fontSize/2)+'" text-anchor="middle" font-size="'+fontSize+'" font-weight="700" font-family="IBM Plex Mono,monospace" fill="white">'+label+'</text>'
+      + '</svg>';
+
+    const marker = L.marker([h.lat, h.lng], {
+      icon: L.divIcon({ html: svg, className: '', iconSize: [size,size], iconAnchor: [size/2,size/2] }),
+      zIndexOffset: 100
+    });
+
+    marker.on('click', () => map.setView([h.lat, h.lng], ZOOM_THRESHOLD));
+    marker.bindTooltip(hood + ' — ' + total.toLocaleString() + ' properties', { direction: 'top', offset: [0, -size/2] });
+    marker.addTo(map);
+    hoodLayers.push(marker);
+  });
+}
+
+// ── VIEWPORT PINS ────────────────────────────────────────
+let lastViewport = null;
+
+function renderViewportPins() {
+  const bounds = map.getBounds().pad(0.2);
+  const boundsKey = bounds.toBBoxString();
+  if (boundsKey === lastViewport) return;
+  lastViewport = boundsKey;
+
+  clusterGroup.clearLayers();
+  allProperties.forEach(prop => {
+    if (!prop.lat || !prop.lng) return;
+    if (!bounds.contains([prop.lat, prop.lng])) return;
+    addMarker(prop);
+  });
 }
 
 function updateStats(data) {

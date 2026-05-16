@@ -7,6 +7,7 @@
 <title>Edmonton Housing Transparency Map</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -244,10 +245,10 @@
 
     <div id="legend">
       <div class="legend-title">Neighbourhood bubbles</div>
-      <div class="legend-row"><div class="l-dot" style="background:#2563eb;"></div> Rental units</div>
-      <div class="legend-row"><div class="l-dot" style="background:#dc2626;"></div> Owner-occupied</div>
-      <div class="legend-row"><div class="l-dot" style="background:#4b5563;"></div> Unverified</div>
-      <div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:2px;margin-bottom:6px;">Bubble size = no. of properties · Click to zoom in</div>
+      <div class="legend-row"><div class="l-dot" style="background:#dc2626;"></div> High density area</div>
+      <div class="legend-row"><div class="l-dot" style="background:#f59e0b;"></div> Medium density area</div>
+      <div class="legend-row"><div class="l-dot" style="background:#16a34a;"></div> Low density area</div>
+      <div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:2px;margin-bottom:6px;">Number = properties · Click to zoom in</div>
       <div style="border-top:1px solid rgba(255,255,255,0.1);margin:7px 0;"></div>
       <div class="legend-title">Individual pins</div>
       <div class="legend-row"><div class="l-dot" style="background:#2563eb;"></div> Rental unit</div>

@@ -138,6 +138,17 @@
   .rep-empty { font-size: 12px; color: var(--gray-400); padding: 6px 0; }
   .rep-link { font-size: 12px; color: var(--blue); cursor: pointer; text-decoration: underline; margin-top: 8px; display: inline-block; }
 
+  #loadingOverlay {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    z-index: 800; text-align: center;
+    background: rgba(11,25,41,0.92); border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 12px; padding: 28px 36px; color: white; pointer-events: none;
+  }
+  #loadingOverlay h3 { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+  #loadingOverlay p  { font-size: 12px; color: rgba(255,255,255,0.5); }
+  #loadingBar { width: 200px; height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; margin: 12px auto 0; overflow: hidden; }
+  #loadingFill { height: 100%; background: var(--amber); border-radius: 2px; width: 0%; transition: width 0.3s; }
+
   #reportModal { display: none; position: fixed; inset: 0; z-index: 9999; background: rgba(11,25,41,0.65); align-items: center; justify-content: center; }
   #reportModal.visible { display: flex; }
   .modal-box { background: white; border-radius: 14px; width: 480px; max-width: 95vw; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.4); }
@@ -218,6 +229,12 @@
     <div id="emptyState">
       <h3>Map is ready</h3>
       <p>Search an Edmonton address above to look up a property, or submit a report to contribute data.</p>
+    </div>
+
+    <div id="loadingOverlay">
+      <h3>Loading Edmonton properties…</h3>
+      <p id="loadingMsg">Fetching 391,487 properties</p>
+      <div id="loadingBar"><div id="loadingFill"></div></div>
     </div>
 
     <div id="statsOverlay">
@@ -431,22 +448,93 @@ clusterGroup.addTo(map);
 
 
 
-// ── LOAD ALL TRACKED PROPERTIES FROM SUPABASE ───────────
-async function loadProperties() {
-  const { data, error } = await sb.from('properties').select('*');
-  if (error) { console.error(error); return; }
+// ── LOAD PROPERTIES ─────────────────────────────────────
+// Step 1: Load all Edmonton properties from static JSON file
+// Step 2: Overlay verified Supabase data on top
 
-  if (!data || data.length === 0) {
-    document.getElementById('emptyState').style.display = 'block';
-    document.getElementById('demoBanner').style.display = 'block';
-    updateStats([]);
-    return;
+let edmPropertyIndex = {}; // account_number -> supabase property data
+
+async function loadProperties() {
+  document.getElementById('emptyState').style.display = 'none';
+  document.getElementById('loadingOverlay').style.display = 'block';
+  document.getElementById('demoBanner').style.display = 'none';
+
+  // Load verified Supabase properties first (for overlay)
+  const { data: verified } = await sb.from('properties').select('*');
+  if (verified) {
+    verified.forEach(p => {
+      if (p.edm_account_number) edmPropertyIndex[p.edm_account_number] = p;
+    });
+    updateStats(verified);
   }
 
-  document.getElementById('emptyState').style.display = 'none';
-  document.getElementById('demoBanner').style.display = 'none';
-  updateStats(data);
-  data.forEach(p => { if (p.lat && p.lng) addMarker(p); });
+  // Load static Edmonton property file
+  try {
+    document.getElementById('loadingMsg').textContent = 'Downloading property data…';
+    const res  = await fetch('/edmonton-properties.json');
+    const json = await res.json();
+    const rows = json.rows;
+    const cols = json.cols; // ['id','addr','hood','lat','lng','type','val']
+
+    document.getElementById('loadingMsg').textContent = `Plotting ${rows.length.toLocaleString()} properties…`;
+
+    // Plot in chunks to keep UI responsive
+    const CHUNK = 5000;
+    for (let i = 0; i < rows.length; i += CHUNK) {
+      const chunk = rows.slice(i, i + CHUNK);
+      chunk.forEach(row => {
+        const r = {};
+        cols.forEach((c, idx) => r[c] = row[idx]);
+        if (!r.lat || !r.lng) return;
+
+        // Merge with verified Supabase data if available
+        const verified = edmPropertyIndex[r.id] || null;
+        const prop = verified ? {
+          ...verified,
+          civic_address: r.addr,
+          neighbourhood: r.hood,
+          lat: r.lat, lng: r.lng,
+          tax_class: r.type,
+          assessed_value: r.val
+        } : {
+          civic_address:    r.addr,
+          neighbourhood:    r.hood,
+          lat:              r.lat,
+          lng:              r.lng,
+          owner_type:       'unknown',
+          occupancy_status: 'unknown',
+          ownership_ca:     null,
+          ownership_us:     null,
+          ownership_other:  null,
+          confidence_score: 0,
+          data_source:      'Edmonton Open Data (unverified)',
+          edm_account_number: r.id,
+          assessed_value:   r.val,
+          tax_class:        r.type
+        };
+
+        addMarker(prop);
+      });
+
+      // Update progress bar
+      const pct = Math.round((i / rows.length) * 100);
+      document.getElementById('loadingFill').style.width = pct + '%';
+      document.getElementById('loadingMsg').textContent = `Plotting ${Math.min(i + CHUNK, rows.length).toLocaleString()} of ${rows.length.toLocaleString()}…`;
+
+      // Yield to browser to keep UI responsive
+      await new Promise(r => setTimeout(r, 0));
+    }
+
+    document.getElementById('loadingOverlay').style.display = 'none';
+    if (!verified || verified.length === 0) {
+      document.getElementById('demoBanner').style.display = 'block';
+    }
+
+  } catch(e) {
+    console.error('Failed to load property data:', e);
+    document.getElementById('loadingOverlay').style.display = 'none';
+    document.getElementById('emptyState').style.display = 'block';
+  }
 }
 
 function updateStats(data) {

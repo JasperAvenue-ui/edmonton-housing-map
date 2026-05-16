@@ -683,23 +683,7 @@ function showPanel(prop) {
           ${prop.listing_url ? `<div class="ic-sub"><a href="${prop.listing_url}" target="_blank" style="color:var(--blue);">View listing →</a></div>` : ''}
           ${prop.monthly_rent && prop.occupancy_status === 'rental' ? `<div class="ic-sub" style="color:var(--blue);font-weight:500;">Rent: $${prop.monthly_rent.toLocaleString()}/mo${prop.rent_recorded_date ? ' (as of ' + prop.rent_recorded_date + ')' : ''}</div>` : ''}
         </div>
-        ${(prop.owner_type === 'corporate' && (prop.ownership_ca || prop.ownership_us || prop.ownership_other)) ? `
-        <div class="info-card wide">
-          <div class="ic-label">Corporate ownership breakdown</div>
-          <div style="display:flex;gap:8px;margin-top:6px;align-items:center;">
-            <div style="flex:1;height:8px;border-radius:4px;overflow:hidden;display:flex;">
-              ${prop.ownership_ca ? `<div style="width:${prop.ownership_ca}%;background:#dc2626;" title="Canada ${prop.ownership_ca}%"></div>` : ''}
-              ${prop.ownership_us ? `<div style="width:${prop.ownership_us}%;background:#2563eb;" title="US ${prop.ownership_us}%"></div>` : ''}
-              ${prop.ownership_other ? `<div style="width:${prop.ownership_other}%;background:#9ca3af;" title="Other ${prop.ownership_other}%"></div>` : ''}
-            </div>
-          </div>
-          <div style="display:flex;gap:12px;margin-top:6px;font-size:11px;color:var(--gray-400);">
-            ${prop.ownership_ca ? `<span><span style="color:#dc2626;">●</span> Canada ${prop.ownership_ca}%</span>` : ''}
-            ${prop.ownership_us ? `<span><span style="color:#2563eb;">●</span> US ${prop.ownership_us}%</span>` : ''}
-            ${prop.ownership_other ? `<span><span style="color:#9ca3af;">●</span> Other ${prop.ownership_other}%</span>` : ''}
-          </div>
-          ${prop.tsx_ticker ? `<div class="ic-sub" style="margin-top:4px;">TSX: ${prop.tsx_ticker}</div>` : ''}
-        </div>` : ''}
+        <div class="info-card wide" id="ownershipPieCard"></div>
       </div>
     </div>
     <div class="pb">
@@ -725,8 +709,66 @@ function showPanel(prop) {
   document.getElementById('panel').classList.add('open');
   document.getElementById('legend').classList.add('panel-open');
 
-  // Load community reports for this property
+  renderOwnershipPie(prop);
   loadReports(prop);
+}
+
+function renderOwnershipPie(prop) {
+  const card = document.getElementById('ownershipPieCard');
+  if (!card) return;
+
+  // Private individuals assumed 100% Canadian
+  const ca    = prop.owner_type === 'individual' ? 100 : (prop.ownership_ca    || 0);
+  const us    = prop.owner_type === 'individual' ? 0   : (prop.ownership_us    || 0);
+  const other = prop.owner_type === 'individual' ? 0   : (prop.ownership_other || 0);
+  const total = ca + us + other;
+
+  card.innerHTML = '<div class="ic-label">Ownership by country</div>';
+
+  if (total === 0) {
+    card.innerHTML += '<div class="ic-sub" style="margin-top:6px;">No ownership data available</div>';
+    return;
+  }
+
+  // Build SVG pie
+  const cx = 36, cy = 36, r = 30;
+  const segs = [{v:ca,c:'#dc2626'},{v:us,c:'#2563eb'},{v:other,c:'#9ca3af'}].filter(s=>s.v>0);
+  let pie = '', a = -Math.PI/2;
+  if (segs.length === 1) {
+    pie = '<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="'+segs[0].c+'"/>';
+  } else {
+    segs.forEach(s => {
+      const pct = s.v/total, ea = a + pct*2*Math.PI;
+      const x1=(cx+r*Math.cos(a)).toFixed(2), y1=(cy+r*Math.sin(a)).toFixed(2);
+      const x2=(cx+r*Math.cos(ea)).toFixed(2), y2=(cy+r*Math.sin(ea)).toFixed(2);
+      pie += '<path d="M'+cx+','+cy+' L'+x1+','+y1+' A'+r+','+r+' 0 '+(pct>0.5?1:0)+',1 '+x2+','+y2+' Z" fill="'+s.c+'"/>';
+      a = ea;
+    });
+  }
+
+  const svg = '<svg width="72" height="72" viewBox="0 0 72 72" style="flex-shrink:0;">'
+    + pie
+    + '<circle cx="36" cy="36" r="30" fill="none" stroke="white" stroke-width="1.5"/>'
+    + '</svg>';
+
+  const flagRows = [
+    {v:ca,    label:'Canada',       src:'https://flagcdn.com/20x15/ca.png'},
+    {v:us,    label:'United States', src:'https://flagcdn.com/20x15/us.png'},
+    {v:other, label:'Other',         src:null}
+  ].filter(f=>f.v>0).map(f =>
+    '<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">'
+    + (f.src ? '<img src="'+f.src+'" width="20" height="15" style="border-radius:2px;flex-shrink:0;">' : '<span style="font-size:14px;">🌍</span>')
+    + '<span style="font-size:12px;color:#374151;">'+f.label+'</span>'
+    + '<span style="font-size:12px;font-weight:600;color:#111827;margin-left:auto;">'+f.v+'%</span>'
+    + '</div>'
+  ).join('');
+
+  card.innerHTML += '<div style="display:flex;gap:14px;align-items:center;margin-top:8px;">'
+    + svg
+    + '<div style="flex:1;">' + flagRows
+    + (prop.tsx_ticker ? '<div style="font-size:10px;color:#9ca3af;margin-top:4px;">TSX: '+prop.tsx_ticker+'</div>' : '')
+    + '</div></div>'
+    + (prop.owner_type === 'individual' ? '<div style="font-size:10px;color:#9ca3af;margin-top:6px;">* Private individuals assumed Canadian-owned</div>' : '');
 }
 
 async function loadReports(prop) {

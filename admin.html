@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --navy: #0b1929; --navy-light: #152742;
+    --amber: #f59e0b; --amber-dark: #92400e;
+    --red: #dc2626; --green: #16a34a; --blue: #2563eb;
+    --gray-50: #f9fafb; --gray-100: #f3f4f6; --gray-200: #e5e7eb;
+    --gray-400: #9ca3af; --gray-600: #4b5563; --gray-700: #374151; --gray-900: #111827;
+    --font: 'IBM Plex Sans', system-ui, sans-serif;
+    --mono: 'IBM Plex Mono', monospace;
+  }
+  html, body { height: 100%; font-family: var(--font); background: var(--gray-50); color: var(--gray-900); }
+
+  /* ── LOGIN SCREEN ── */
+  #loginScreen {
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    background: var(--navy);
+  }
+  .login-box {
+    background: white; border-radius: 14px; padding: 36px 40px;
+    width: 380px; box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+  }
+  .login-logo {
+    width: 40px; height: 40px; background: var(--amber); border-radius: 10px;
+    display: flex; align-items: center; justify-content: center; margin-bottom: 20px;
+  }
+  .login-title { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+  .login-sub { font-size: 13px; color: var(--gray-400); margin-bottom: 28px; }
+  .field { margin-bottom: 16px; }
+  .field label { display: block; font-size: 12px; font-weight: 500; color: var(--gray-600); margin-bottom: 5px; }
+  .field input {
+    width: 100%; border: 1px solid var(--gray-200); border-radius: 8px;
+    padding: 10px 12px; font-family: var(--font); font-size: 14px;
+    color: var(--gray-900); outline: none; background: white;
+  }
+  .field input:focus { border-color: var(--amber); }
+  .btn-login {
+    width: 100%; background: var(--navy); color: white; border: none;
+    padding: 11px; border-radius: 8px; font-family: var(--font);
+    font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 4px;
+  }
+  .btn-login:hover { background: var(--navy-light); }
+  .btn-login:disabled { opacity: 0.5; cursor: not-allowed; }
+  .login-error { font-size: 12px; color: var(--red); margin-top: 10px; display: none; }
+
+  /* ── ADMIN SHELL ── */
+  #adminScreen { display: none; min-height: 100vh; }
+
+  #topbar {
+    background: var(--navy); color: white;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; height: 52px;
+    border-bottom: 2px solid var(--amber);
+    position: sticky; top: 0; z-index: 100;
+  }
+  .tb-left { display: flex; align-items: center; gap: 12px; }
+  .tb-logo { width: 26px; height: 26px; background: var(--amber); border-radius: 6px; display: flex; align-items: center; justify-content: center; }
+  .tb-title { font-size: 14px; font-weight: 600; }
+  .tb-sub { font-size: 11px; color: rgba(255,255,255,0.4); margin-left: 4px; }
+  .btn-logout {
+    background: none; border: 1px solid rgba(255,255,255,0.25); color: rgba(255,255,255,0.7);
+    padding: 5px 12px; border-radius: 6px; font-family: var(--font);
+    font-size: 12px; cursor: pointer;
+  }
+  .btn-logout:hover { border-color: rgba(255,255,255,0.5); color: white; }
+
+  /* ── CONTENT ── */
+  #content { max-width: 900px; margin: 0 auto; padding: 32px 24px; }
+
+  .page-title { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+  .page-sub { font-size: 13px; color: var(--gray-400); margin-bottom: 28px; }
+
+  /* ── TABS ── */
+  .tabs { display: flex; gap: 2px; margin-bottom: 24px; border-bottom: 1px solid var(--gray-200); }
+  .tab {
+    padding: 8px 16px; font-size: 13px; font-weight: 500; cursor: pointer;
+    color: var(--gray-400); border-bottom: 2px solid transparent; margin-bottom: -1px;
+    transition: color 0.15s;
+  }
+  .tab:hover { color: var(--gray-700); }
+  .tab.active { color: var(--navy); border-bottom-color: var(--amber); }
+
+  /* ── STATS ROW ── */
+  .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 28px; }
+  .stat-card { background: white; border: 1px solid var(--gray-200); border-radius: 10px; padding: 16px 20px; }
+  .stat-num { font-size: 28px; font-weight: 600; font-family: var(--mono); }
+  .stat-label { font-size: 12px; color: var(--gray-400); margin-top: 2px; }
+
+  /* ── SUBMISSION CARDS ── */
+  .section-title { font-size: 12px; font-weight: 600; color: var(--gray-400); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 12px; }
+
+  .sub-card {
+    background: white; border: 1px solid var(--gray-200); border-radius: 10px;
+    margin-bottom: 12px; overflow: hidden;
+  }
+  .sub-card.approved { border-left: 3px solid var(--green); }
+  .sub-card.rejected { border-left: 3px solid var(--red); opacity: 0.6; }
+
+  .sub-header {
+    padding: 14px 18px; display: flex; align-items: flex-start;
+    justify-content: space-between; gap: 12px;
+  }
+  .sub-addr { font-size: 14px; font-weight: 600; color: var(--gray-900); }
+  .sub-meta { font-size: 11px; color: var(--gray-400); margin-top: 3px; }
+
+  .sub-body { padding: 0 18px 14px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .sub-field { }
+  .sf-label { font-size: 10px; color: var(--gray-400); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 3px; }
+  .sf-value { font-size: 13px; color: var(--gray-700); }
+
+  .sub-notes {
+    margin: 0 18px 14px; padding: 10px 12px;
+    background: var(--gray-50); border-radius: 7px;
+    font-size: 12px; color: var(--gray-600); line-height: 1.5;
+  }
+
+  .sub-actions { padding: 12px 18px; border-top: 1px solid var(--gray-100); display: flex; gap: 8px; align-items: center; }
+  .btn-approve {
+    background: var(--green); color: white; border: none;
+    padding: 7px 16px; border-radius: 7px; font-family: var(--font);
+    font-size: 12px; font-weight: 600; cursor: pointer;
+  }
+  .btn-approve:hover { opacity: 0.85; }
+  .btn-reject {
+    background: none; border: 1px solid var(--gray-200); color: var(--gray-600);
+    padding: 6px 16px; border-radius: 7px; font-family: var(--font);
+    font-size: 12px; cursor: pointer;
+  }
+  .btn-reject:hover { border-color: var(--red); color: var(--red); }
+  .btn-approve:disabled, .btn-reject:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .reviewer-note-input {
+    flex: 1; border: 1px solid var(--gray-200); border-radius: 7px;
+    padding: 6px 10px; font-family: var(--font); font-size: 12px;
+    color: var(--gray-700); outline: none;
+  }
+  .reviewer-note-input:focus { border-color: var(--amber); }
+
+  .action-result { font-size: 12px; font-weight: 500; }
+  .action-result.ok { color: var(--green); }
+  .action-result.err { color: var(--red); }
+
+  .badge { display: inline-flex; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px; }
+  .badge-pending { background: #fef3c7; color: #92400e; }
+  .badge-approved { background: #dcfce7; color: #166534; }
+  .badge-rejected { background: #fee2e2; color: #991b1b; }
+
+  .empty-state { text-align: center; padding: 60px 24px; color: var(--gray-400); }
+  .empty-state h3 { font-size: 15px; font-weight: 500; margin-bottom: 6px; color: var(--gray-600); }
+  .empty-state p { font-size: 13px; }
+
+  .loading { text-align: center; padding: 40px; color: var(--gray-400); font-size: 13px; }
+
+  /* ── PROPERTIES TAB ── */
+  .prop-card {
+    background: white; border: 1px solid var(--gray-200); border-radius: 10px;
+    padding: 14px 18px; margin-bottom: 10px;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  }
+  .prop-addr { font-size: 13px; font-weight: 600; }
+  .prop-meta { font-size: 11px; color: var(--gray-400); margin-top: 2px; }
+  .prop-badges { display: flex; gap: 6px; flex-shrink: 0; }
+  .badge-corp { background: #fef3c7; color: #92400e; }
+  .badge-indiv { background: #dcfce7; color: #166534; }
+  .badge-unknown { background: var(--gray-100); color: var(--gray-600); }
+  .badge-rental { background: #dbeafe; color: #1d4ed8; }
+  .badge-owner { background: #dcfce7; color: #166534; }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginScreen">
+  <div class="login-box">
+    <div class="login-logo">
+      <svg width="20" height="20" viewBox="0 0 16 16" fill="none">
+        <path d="M8 1L2 5v9h4V9h4v5h4V5L8 1z" fill="#0b1929"/>
+      </svg>
+    </div>
+    <div class="login-title">Moderator login</div>
+    <div class="login-sub">Edmonton Housing Transparency Map</div>
+    <div class="field">
+      <label>Email</label>
+      <input type="email" id="loginEmail" placeholder="your@email.com" autocomplete="email">
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password">
+    </div>
+    <button class="btn-login" id="loginBtn" onclick="login()">Sign in</button>
+    <div class="login-error" id="loginError"></div>
+  </div>
+</div>
+
+<!-- ADMIN -->
+<div id="adminScreen">
+  <div id="topbar">
+    <div class="tb-left">
+      <div class="tb-logo">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+          <path d="M8 1L2 5v9h4V9h4v5h4V5L8 1z" fill="#0b1929"/>
+        </svg>
+      </div>
+      <span class="tb-title">Housing Map — Mod Panel</span>
+      <span class="tb-sub" id="modEmail"></span>
+    </div>
+    <button class="btn-logout" onclick="logout()">Sign out</button>
+  </div>
+
+  <div id="content">
+    <div class="page-title">Moderation dashboard</div>
+    <div class="page-sub">Review citizen submissions before they appear on the public map.</div>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-num" id="statPending">—</div>
+        <div class="stat-label">Pending review</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num" id="statApproved">—</div>
+        <div class="stat-label">Approved</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num" id="statProperties">—</div>
+        <div class="stat-label">Live properties</div>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('pending')">Pending</div>
+      <div class="tab" onclick="switchTab('approved')">Approved</div>
+      <div class="tab" onclick="switchTab('properties')">Live properties</div>
+    </div>
+
+    <div id="tabContent"></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+
+// ── CONFIG ──────────────────────────────────────────────
+// CONNECT SUPABASE AUTH HERE — credentials below are for this project only
+const SUPABASE_URL = 'https://gagdamisqiooveeexnhf.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_eCYnATVmOmS02F7DhSZkew_iUecJvFa';
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let currentTab = 'pending';
+let allSubmissions = [];
+
+// ── AUTH ─────────────────────────────────────────────────
+async function checkSession() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) showAdmin(session.user);
+}
+
+async function login() {
+  const email    = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const errEl    = document.getElementById('loginError');
+  const btn      = document.getElementById('loginBtn');
+
+  if (!email || !password) {
+    errEl.textContent = 'Please enter your email and password.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Signing in…';
+  errEl.style.display = 'none';
+
+  const { data, error } = await sb.auth.signInWithPassword({ email, password });
+
+  btn.disabled = false;
+  btn.textContent = 'Sign in';
+
+  if (error) {
+    errEl.textContent = error.message;
+    errEl.style.display = 'block';
+    return;
+  }
+
+  showAdmin(data.user);
+}
+
+async function logout() {
+  await sb.auth.signOut();
+  document.getElementById('adminScreen').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('loginEmail').value = '';
+  document.getElementById('loginPassword').value = '';
+}
+
+function showAdmin(user) {
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('adminScreen').style.display = 'block';
+  document.getElementById('modEmail').textContent = user.email;
+  loadAll();
+}
+
+// ── LOAD DATA ────────────────────────────────────────────
+async function loadAll() {
+  await Promise.all([loadSubmissions(), loadPropertyCount()]);
+}
+
+async function loadSubmissions() {
+  const { data, error } = await sb
+    .from('submissions')
+    .select('*')
+    .order('submitted_at', { ascending: false });
+
+  if (error) { console.error(error); return; }
+
+  allSubmissions = data || [];
+
+  const pending  = allSubmissions.filter(s => !s.approved && !s.reviewed_at);
+  const approved = allSubmissions.filter(s => s.approved);
+
+  document.getElementById('statPending').textContent  = pending.length;
+  document.getElementById('statApproved').textContent = approved.length;
+
+  renderTab(currentTab);
+}
+
+async function loadPropertyCount() {
+  const { count } = await sb
+    .from('properties')
+    .select('*', { count: 'exact', head: true });
+
+  document.getElementById('statProperties').textContent = count ?? 0;
+}
+
+// ── TABS ─────────────────────────────────────────────────
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab').forEach((el, i) => {
+    el.classList.toggle('active', ['pending','approved','properties'][i] === tab);
+  });
+  renderTab(tab);
+}
+
+async function renderTab(tab) {
+  const el = document.getElementById('tabContent');
+
+  if (tab === 'pending') {
+    const pending = allSubmissions.filter(s => !s.approved && !s.reviewed_at);
+    if (pending.length === 0) {
+      el.innerHTML = `<div class="empty-state"><h3>No pending submissions</h3><p>New citizen reports will appear here for review.</p></div>`;
+      return;
+    }
+    el.innerHTML = `<div class="section-title">${pending.length} awaiting review</div>` +
+      pending.map(s => submissionCard(s)).join('');
+  }
+
+  if (tab === 'approved') {
+    const approved = allSubmissions.filter(s => s.approved);
+    if (approved.length === 0) {
+      el.innerHTML = `<div class="empty-state"><h3>No approved submissions yet</h3><p>Submissions you approve will appear here.</p></div>`;
+      return;
+    }
+    el.innerHTML = `<div class="section-title">${approved.length} approved</div>` +
+      approved.map(s => submissionCard(s)).join('');
+  }
+
+  if (tab === 'properties') {
+    el.innerHTML = `<div class="loading">Loading live properties…</div>`;
+    const { data, error } = await sb.from('properties').select('*').order('last_updated', { ascending: false });
+    if (error || !data || data.length === 0) {
+      el.innerHTML = `<div class="empty-state"><h3>No live properties yet</h3><p>Properties are added when you approve submissions or connect Edmonton Open Data.</p></div>`;
+      return;
+    }
+    el.innerHTML = `<div class="section-title">${data.length} live properties</div>` +
+      data.map(p => propertyCard(p)).join('');
+  }
+}
+
+// ── CARDS ─────────────────────────────────────────────────
+function submissionCard(s) {
+  const isPending  = !s.approved && !s.reviewed_at;
+  const isApproved = s.approved;
+  const statusBadge = isApproved
+    ? `<span class="badge badge-approved">Approved</span>`
+    : isPending
+    ? `<span class="badge badge-pending">Pending</span>`
+    : `<span class="badge badge-rejected">Rejected</span>`;
+
+  const submitted = new Date(s.submitted_at).toLocaleDateString('en-CA', {
+    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+  });
+
+  const cardClass = isApproved ? 'approved' : !isPending ? 'rejected' : '';
+
+  return `
+    <div class="sub-card ${cardClass}" id="card-${s.id}">
+      <div class="sub-header">
+        <div>
+          <div class="sub-addr">${s.civic_address}</div>
+          <div class="sub-meta">${s.neighbourhood || 'Neighbourhood unknown'} · Submitted ${submitted}</div>
+          ${s.submitter_ip ? `<div class="sub-meta" style="font-family:var(--mono);font-size:10px;color:var(--gray-400);margin-top:2px;">IP: ${s.submitter_ip}</div>` : ''}
+        </div>
+        ${statusBadge}
+      </div>
+      <div class="sub-body">
+        <div class="sub-field">
+          <div class="sf-label">Housing situation</div>
+          <div class="sf-value">${formatStatus(s.reported_status)}</div>
+        </div>
+        <div class="sub-field">
+          <div class="sf-label">Landlord type</div>
+          <div class="sf-value">${s.landlord_type ? formatLandlord(s.landlord_type) : '—'}</div>
+        </div>
+        <div class="sub-field">
+          <div class="sf-label">Company name</div>
+          <div class="sf-value">${s.company_name || '—'}</div>
+        </div>
+      </div>
+      ${s.notes ? `<div class="sub-notes">"${s.notes}"</div>` : ''}
+      ${isPending ? `
+      <div class="sub-actions">
+        <button class="btn-approve" onclick="approve('${s.id}')">✓ Approve</button>
+        <button class="btn-reject"  onclick="reject('${s.id}')">Reject</button>
+        <input class="reviewer-note-input" id="note-${s.id}" placeholder="Optional reviewer note…">
+        <span class="action-result" id="result-${s.id}"></span>
+      </div>` : s.reviewer_note ? `
+      <div class="sub-actions" style="background:var(--gray-50);">
+        <span style="font-size:12px;color:var(--gray-400);">Note: ${s.reviewer_note}</span>
+      </div>` : ''}
+    </div>`;
+}
+
+function propertyCard(p) {
+  const ownerBadge = p.owner_type === 'corporate'
+    ? `<span class="badge badge-corp">Corporate</span>`
+    : p.owner_type === 'individual'
+    ? `<span class="badge badge-indiv">Individual</span>`
+    : `<span class="badge badge-unknown">Unknown</span>`;
+
+  const statusBadge = p.occupancy_status === 'rental'
+    ? `<span class="badge badge-rental">Rental</span>`
+    : p.occupancy_status === 'owner-occupied'
+    ? `<span class="badge badge-owner">Owner-occ.</span>`
+    : `<span class="badge badge-unknown">Unknown</span>`;
+
+  return `
+    <div class="prop-card">
+      <div>
+        <div class="prop-addr">${p.civic_address}</div>
+        <div class="prop-meta">${p.neighbourhood || ''} · Confidence: ${p.confidence_score ?? 0}%</div>
+      </div>
+      <div class="prop-badges">${ownerBadge}${statusBadge}</div>
+    </div>`;
+}
+
+// ── ACTIONS ───────────────────────────────────────────────
+async function approve(id) {
+  const note     = document.getElementById(`note-${id}`).value.trim();
+  const resultEl = document.getElementById(`result-${id}`);
+  setCardBusy(id, true);
+
+  // Find the submission
+  const sub = allSubmissions.find(s => s.id === id);
+  if (!sub) { resultEl.textContent = 'Error — submission not found'; resultEl.className = 'action-result err'; setCardBusy(id, false); return; }
+
+  // 1. Mark submission as approved
+  const { error: subError } = await sb.from('submissions').update({
+    approved: true,
+    reviewed_at: new Date().toISOString(),
+    reviewer_note: note || null
+  }).eq('id', id);
+
+  if (subError) {
+    resultEl.textContent = 'Error — try again';
+    resultEl.className = 'action-result err';
+    setCardBusy(id, false);
+    return;
+  }
+
+  // 2. Write to properties table (upsert on civic_address)
+  // Map submission fields to property fields
+  const ownerType = sub.landlord_type === 'corporate' ? 'corporate'
+    : sub.landlord_type === 'individual' ? 'individual' : 'unknown';
+
+  const occupancyStatus = sub.reported_status === 'rental' ? 'rental'
+    : sub.reported_status === 'owner-occupied' ? 'owner-occupied'
+    : sub.reported_status === 'owner-renting' ? 'rental' : 'unknown';
+
+  // Check if property already exists
+  const { data: existing } = await sb
+    .from('properties')
+    .select('id, confidence_score')
+    .ilike('civic_address', sub.civic_address)
+    .limit(1);
+
+  if (existing && existing.length > 0) {
+    // Update existing property
+    const newConfidence = Math.min(100, (existing[0].confidence_score || 0) + 20);
+    await sb.from('properties').update({
+      occupancy_status: occupancyStatus,
+      owner_type:       ownerType === 'unknown' ? existing[0].owner_type : ownerType,
+      owner_name:       sub.company_name || null,
+      confidence_score: newConfidence,
+      data_source:      'Community report (mod-approved)',
+      last_updated:     new Date().toISOString()
+    }).eq('id', existing[0].id);
+  } else {
+    // Insert new property — coordinates unknown until Edmonton API is queried
+    await sb.from('properties').insert({
+      civic_address:    sub.civic_address,
+      neighbourhood:    sub.neighbourhood || null,
+      owner_type:       ownerType,
+      owner_name:       sub.company_name || null,
+      occupancy_status: occupancyStatus,
+      confidence_score: 50,
+      data_source:      'Community report (mod-approved)',
+      last_updated:     new Date().toISOString()
+    });
+  }
+
+  resultEl.textContent = '✓ Approved — map updated';
+  resultEl.className = 'action-result ok';
+  setTimeout(() => loadAll(), 800);
+}
+
+async function reject(id) {
+  const note    = document.getElementById(`note-${id}`).value.trim();
+  const resultEl = document.getElementById(`result-${id}`);
+  setCardBusy(id, true);
+
+  const { error } = await sb.from('submissions').update({
+    approved: false,
+    reviewed_at: new Date().toISOString(),
+    reviewer_note: note || null
+  }).eq('id', id);
+
+  if (error) {
+    resultEl.textContent = 'Error — try again';
+    resultEl.className = 'action-result err';
+    setCardBusy(id, false);
+    return;
+  }
+
+  resultEl.textContent = '✗ Rejected';
+  resultEl.className = 'action-result err';
+  setTimeout(() => loadAll(), 800);
+}
+
+function setCardBusy(id, busy) {
+  const card = document.getElementById(`card-${id}`);
+  if (!card) return;
+  card.querySelectorAll('button').forEach(b => b.disabled = busy);
+}
+
+// ── HELPERS ───────────────────────────────────────────────
+function formatStatus(s) {
+  return s === 'rental'        ? 'Renting from landlord'
+    : s === 'owner-occupied'   ? 'Owner-occupied'
+    : s === 'owner-renting'    ? 'Owner renting to others'
+    : s === 'unknown'          ? 'Unsure'
+    : s || '—';
+}
+function formatLandlord(s) {
+  return s === 'corporate' ? 'Company / Corporation'
+    : s === 'individual'   ? 'Private individual'
+    : s === 'unknown'      ? 'Unknown'
+    : s || '—';
+}
+
+// ── KEYBOARD ─────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && document.getElementById('loginScreen').style.display !== 'none') {
+    login();
+  }
+});
+
+// ── BOOT ─────────────────────────────────────────────────
+checkSession();
+
+</script>
+</body>
+</html>

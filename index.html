@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Edmonton Housing Transparency Map</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --navy: #0b1929; --navy-light: #152742;
+    --amber: #f59e0b; --amber-dark: #92400e;
+    --red: #dc2626; --green: #16a34a; --blue: #2563eb;
+    --gray-50: #f9fafb; --gray-100: #f3f4f6; --gray-200: #e5e7eb;
+    --gray-400: #9ca3af; --gray-600: #4b5563; --gray-700: #374151; --gray-900: #111827;
+    --font: 'IBM Plex Sans', system-ui, sans-serif;
+    --mono: 'IBM Plex Mono', monospace;
+    --panel-w: 360px;
+  }
+  html, body { height: 100%; overflow: hidden; font-family: var(--font); }
+  #app { display: flex; flex-direction: column; height: 100vh; }
+
+  #topbar {
+    background: var(--navy); color: white;
+    display: flex; align-items: center; gap: 16px;
+    padding: 0 20px; height: 52px; flex-shrink: 0;
+    border-bottom: 2px solid var(--amber); z-index: 1000;
+  }
+  .logo { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  .logo-icon { width: 28px; height: 28px; background: var(--amber); border-radius: 6px; display: flex; align-items: center; justify-content: center; }
+  .logo-text { font-size: 14px; font-weight: 600; }
+  .logo-sub { font-size: 11px; color: rgba(255,255,255,0.5); letter-spacing: 0.05em; text-transform: uppercase; margin-top: 1px; }
+  .divider { width: 1px; height: 24px; background: rgba(255,255,255,0.15); }
+
+  .search-wrap { flex: 1; position: relative; max-width: 520px; }
+  .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--gray-400); pointer-events: none; }
+  #searchInput {
+    width: 100%; height: 36px;
+    background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 8px; padding: 0 12px 0 38px;
+    font-family: var(--font); font-size: 13px; color: white; outline: none;
+  }
+  #searchInput::placeholder { color: rgba(255,255,255,0.4); }
+  #searchInput:focus { border-color: var(--amber); }
+  #searchDropdown {
+    position: absolute; top: calc(100% + 6px); left: 0; right: 0;
+    background: white; border-radius: 10px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+    overflow: hidden; z-index: 9999; display: none; max-height: 300px; overflow-y: auto;
+  }
+  .search-item { padding: 10px 16px; cursor: pointer; border-bottom: 1px solid var(--gray-100); display: flex; align-items: center; gap: 10px; }
+  .search-item:hover { background: var(--gray-50); }
+  .search-item:last-child { border-bottom: none; }
+  .si-addr { font-size: 13px; font-weight: 500; color: var(--gray-900); }
+  .si-sub { font-size: 11px; color: var(--gray-400); margin-top: 1px; }
+  .si-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .search-msg { padding: 12px 16px; font-size: 13px; color: var(--gray-400); }
+
+  #btnReport {
+    background: var(--amber); color: var(--amber-dark);
+    border: none; padding: 7px 14px; border-radius: 7px;
+    font-family: var(--font); font-size: 12px; font-weight: 600;
+    cursor: pointer; white-space: nowrap; flex-shrink: 0;
+  }
+  #btnReport:hover { opacity: 0.85; }
+
+  #main { flex: 1; display: flex; overflow: hidden; position: relative; }
+  #map { flex: 1; z-index: 1; }
+
+  #demoBanner {
+    position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+    z-index: 800; background: rgba(11,25,41,0.92); color: rgba(255,255,255,0.8);
+    border: 1px solid var(--amber); border-radius: 8px;
+    padding: 8px 16px; font-size: 12px; white-space: nowrap; pointer-events: none;
+  }
+  #demoBanner span { color: var(--amber); font-weight: 600; }
+
+  #emptyState {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    z-index: 800; text-align: center;
+    background: rgba(11,25,41,0.9); border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 12px; padding: 28px 32px; color: white; pointer-events: none;
+  }
+  #emptyState h3 { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+  #emptyState p { font-size: 12px; color: rgba(255,255,255,0.5); max-width: 240px; line-height: 1.6; }
+
+  #statsOverlay { position: absolute; bottom: 28px; left: 16px; z-index: 800; display: flex; flex-direction: column; gap: 6px; }
+  .stat-pill { background: rgba(11,25,41,0.88); color: white; border-radius: 20px; padding: 5px 12px; font-size: 12px; display: flex; align-items: center; gap: 6px; border: 1px solid rgba(255,255,255,0.1); }
+  .stat-dot { width: 7px; height: 7px; border-radius: 50%; }
+  .stat-num { font-weight: 600; font-family: var(--mono); }
+
+  #legend { position: absolute; bottom: 28px; right: 16px; z-index: 800; background: rgba(11,25,41,0.88); border-radius: 10px; padding: 10px 14px; border: 1px solid rgba(255,255,255,0.1); color: white; font-size: 11px; transition: right 0.25s; }
+  #legend.panel-open { right: calc(var(--panel-w) + 16px); }
+  .legend-title { font-weight: 600; margin-bottom: 7px; color: var(--amber); text-transform: uppercase; font-size: 10px; letter-spacing: 0.04em; }
+  .legend-row { display: flex; align-items: center; gap: 7px; margin-bottom: 4px; color: rgba(255,255,255,0.85); }
+  .legend-row:last-child { margin-bottom: 0; }
+  .l-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .l-pin { font-size: 9px; font-weight: 700; color: white; padding: 1px 5px; border-radius: 3px; }
+
+  #panel { width: 0; flex-shrink: 0; background: white; border-left: 2px solid var(--amber); overflow: hidden; transition: width 0.25s ease; z-index: 700; }
+  #panel.open { width: var(--panel-w); }
+  #panelInner { width: var(--panel-w); height: 100%; overflow-y: auto; display: flex; flex-direction: column; }
+  #panelInner::-webkit-scrollbar { width: 4px; }
+  #panelInner::-webkit-scrollbar-thumb { background: var(--gray-200); border-radius: 4px; }
+
+  .ph { background: var(--navy); color: white; padding: 16px 18px; flex-shrink: 0; }
+  .ph-hood { font-size: 11px; color: rgba(255,255,255,0.5); display: flex; justify-content: space-between; align-items: center; }
+  .ph-addr { font-size: 13px; font-weight: 600; line-height: 1.4; margin-top: 4px; }
+  .ph-close { background: none; border: none; color: rgba(255,255,255,0.5); cursor: pointer; font-size: 20px; line-height: 1; padding: 0; }
+  .ph-close:hover { color: white; }
+
+  .pb { padding: 16px 18px; border-bottom: 1px solid var(--gray-100); }
+  .pb-title { font-size: 10px; font-weight: 600; color: var(--gray-400); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 10px; }
+  .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .info-card { background: var(--gray-50); border-radius: 8px; padding: 10px 12px; }
+  .wide { grid-column: 1 / -1; }
+  .ic-label { font-size: 10px; color: var(--gray-400); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+  .ic-value { font-size: 13px; font-weight: 500; color: var(--gray-900); }
+  .ic-sub { font-size: 11px; color: var(--gray-400); margin-top: 3px; }
+
+  .badge { display: inline-flex; align-items: center; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 5px; }
+  .badge-corp { background: #fef3c7; color: #92400e; }
+  .badge-indiv { background: #dcfce7; color: #166534; }
+  .badge-rental { background: #dbeafe; color: #1d4ed8; }
+  .badge-owner { background: #dcfce7; color: #166534; }
+  .badge-unknown { background: var(--gray-100); color: var(--gray-600); }
+
+  .conf-label { display: flex; justify-content: space-between; margin-bottom: 4px; }
+  .conf-bar { height: 5px; background: var(--gray-200); border-radius: 3px; overflow: hidden; }
+  .conf-fill { height: 100%; border-radius: 3px; }
+  .conf-pct { font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--gray-700); }
+  .conf-src { font-size: 10px; color: var(--gray-400); margin-top: 5px; }
+
+  .rep-empty { font-size: 12px; color: var(--gray-400); padding: 6px 0; }
+  .rep-link { font-size: 12px; color: var(--blue); cursor: pointer; text-decoration: underline; margin-top: 8px; display: inline-block; }
+
+  #reportModal { display: none; position: fixed; inset: 0; z-index: 9999; background: rgba(11,25,41,0.65); align-items: center; justify-content: center; }
+  #reportModal.visible { display: flex; }
+  .modal-box { background: white; border-radius: 14px; width: 480px; max-width: 95vw; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.4); }
+  .modal-header { background: var(--navy); color: white; padding: 18px 22px; border-radius: 14px 14px 0 0; display: flex; justify-content: space-between; align-items: flex-start; }
+  .modal-title { font-size: 15px; font-weight: 600; }
+  .modal-sub { font-size: 12px; color: rgba(255,255,255,0.5); margin-top: 3px; }
+  .modal-close { background: none; border: none; color: rgba(255,255,255,0.5); cursor: pointer; font-size: 22px; line-height: 1; padding: 0; }
+  .modal-close:hover { color: white; }
+  .modal-body { padding: 20px 22px; }
+  .notice { background: #fefce8; border: 1px solid #fde68a; border-radius: 8px; padding: 10px 13px; font-size: 12px; color: #92400e; margin-bottom: 18px; line-height: 1.5; }
+  .form-group { margin-bottom: 14px; }
+  label { display: block; font-size: 12px; font-weight: 500; color: var(--gray-600); margin-bottom: 5px; }
+  input[type=text], select, textarea { width: 100%; border: 1px solid var(--gray-200); border-radius: 8px; padding: 9px 12px; font-family: var(--font); font-size: 13px; color: var(--gray-900); outline: none; background: white; }
+  input[type=text]:focus, select:focus, textarea:focus { border-color: var(--amber); }
+  textarea { resize: vertical; min-height: 70px; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .form-note { font-size: 11px; color: var(--gray-400); margin-top: 4px; }
+  .form-actions { display: flex; gap: 10px; align-items: center; margin-top: 18px; flex-wrap: wrap; }
+  .btn-primary { background: var(--navy); color: white; border: none; padding: 10px 22px; border-radius: 8px; font-family: var(--font); font-size: 13px; font-weight: 600; cursor: pointer; }
+  .btn-primary:hover { background: var(--navy-light); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-sec { background: none; border: 1px solid var(--gray-200); color: var(--gray-600); padding: 9px 18px; border-radius: 8px; font-family: var(--font); font-size: 13px; cursor: pointer; }
+  .success-msg { font-size: 12px; color: var(--green); font-weight: 500; display: none; }
+  .error-msg { font-size: 12px; color: var(--red); font-weight: 500; display: none; }
+
+  .hm-pin { position: relative; width: 32px; height: 40px; }
+  .hm-pin .pin-body { width: 28px; height: 28px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); position: absolute; top: 0; left: 2px; border: 2.5px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.25); display: flex; align-items: center; justify-content: center; }
+  .hm-pin .pin-letter { transform: rotate(45deg); font-size: 10px; font-weight: 700; color: white; font-family: 'IBM Plex Sans', system-ui, sans-serif; }
+  .hm-pin .pin-shadow { position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); width: 12px; height: 4px; background: rgba(0,0,0,0.2); border-radius: 50%; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="topbar">
+    <div class="logo">
+      <div class="logo-icon">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M8 1L2 5v9h4V9h4v5h4V5L8 1z" fill="#0b1929"/>
+        </svg>
+      </div>
+      <div>
+        <div class="logo-text">Edmonton Housing Transparency Map</div>
+        <div class="logo-sub">Public Civic Tool</div>
+      </div>
+    </div>
+    <div class="divider"></div>
+    <div class="search-wrap">
+      <svg class="search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+      </svg>
+      <input type="text" id="searchInput" placeholder="Search an Edmonton address…" autocomplete="off">
+      <div id="searchDropdown"></div>
+    </div>
+    <button id="btnReport" onclick="openReport()">+ Report your housing status</button>
+  </div>
+
+  <div id="main">
+    <div id="map"></div>
+
+    <div id="demoBanner">
+      <span>No verified data yet</span> — search any Edmonton address to look it up
+    </div>
+
+    <div id="emptyState">
+      <h3>Map is ready</h3>
+      <p>Search an Edmonton address above to look up a property, or submit a report to contribute data.</p>
+    </div>
+
+    <div id="statsOverlay">
+      <div class="stat-pill"><div class="stat-dot" style="background:#fff;"></div><span class="stat-num" id="stTotal">0</span> properties tracked</div>
+      <div class="stat-pill"><div class="stat-dot" style="background:var(--red);"></div><span class="stat-num" id="stCorp">0</span> corporate-owned</div>
+      <div class="stat-pill"><div class="stat-dot" style="background:var(--blue);"></div><span class="stat-num" id="stRental">0</span> confirmed rentals</div>
+    </div>
+
+    <div id="legend">
+      <div class="legend-title">Pin border</div>
+      <div class="legend-row"><div class="l-dot" style="background:var(--blue);"></div> Rental unit</div>
+      <div class="legend-row"><div class="l-dot" style="background:var(--red);"></div> Owner-occupied</div>
+      <div class="legend-row"><div class="l-dot" style="background:var(--gray-400);"></div> Unknown</div>
+      <div style="border-top:1px solid rgba(255,255,255,0.1);margin:7px 0;"></div>
+      <div class="legend-title">Pie chart</div>
+      <div class="legend-row"><div class="l-dot" style="background:#dc2626;"></div> Canada</div>
+      <div class="legend-row"><div class="l-dot" style="background:#2563eb;"></div> United States</div>
+      <div class="legend-row"><div class="l-dot" style="background:#9ca3af;"></div> Other</div>
+    </div>
+
+    <div id="panel">
+      <div id="panelInner"></div>
+    </div>
+  </div>
+</div>
+
+<div id="reportModal" onclick="handleModalBg(event)">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">Report your housing situation</div>
+        <div class="modal-sub">Reviewed by a moderator before going live</div>
+      </div>
+      <button class="modal-close" onclick="closeReport()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="notice">🔒 <strong>Anonymous.</strong> No names or contact info are stored. All reports are reviewed before appearing on the map.</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Street address *</label>
+          <input type="text" id="rAddr" placeholder="e.g. 10011 107 St NW">
+        </div>
+        <div class="form-group">
+          <label>Neighbourhood</label>
+          <select id="rHood">
+            <option value="">Select…</option>
+            <option>Downtown</option><option>Oliver</option><option>Strathcona</option>
+            <option>Glenora</option><option>Ritchie</option><option>Garneau</option>
+            <option>Westmount</option><option>Boyle Street</option><option>Queen Mary Park</option>
+            <option>Ottewell</option><option>Millwoods</option><option>Other</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Your housing situation *</label>
+        <select id="rStatus" onchange="toggleLandlordFields()">
+          <option value="">Select…</option>
+          <option value="rental">I rent this unit from a landlord</option>
+          <option value="owner-occupied">I own this and live here</option>
+          <option value="owner-renting">I own this and rent to others</option>
+          <option value="unknown">I live here but unsure of ownership</option>
+        </select>
+      </div>
+      <div id="landlordFields" style="display:none;">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Landlord type</label>
+            <select id="rLandlord">
+              <option value="">Select…</option>
+              <option value="corporate">A company or corporation</option>
+              <option value="individual">A private individual</option>
+              <option value="unknown">I don't know</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Company name (if known)</label>
+            <input type="text" id="rCompany" placeholder="e.g. Boardwalk REIT">
+          </div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Additional notes (optional)</label>
+        <textarea id="rNotes" placeholder="Anything else that would help other residents…"></textarea>
+        <div class="form-note">Anonymized before publication.</div>
+      </div>
+      <div class="form-actions">
+        <button class="btn-primary" id="submitBtn" onclick="submitReport()">Submit anonymously</button>
+        <button class="btn-sec" onclick="closeReport()">Cancel</button>
+        <span class="success-msg" id="successMsg">✓ Submitted — thank you.</span>
+        <span class="error-msg" id="errorMsg"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+
+// ── CONFIG ──────────────────────────────────────────────
+const SUPABASE_URL     = 'https://gagdamisqiooveeexnhf.supabase.co';
+const SUPABASE_KEY     = 'sb_publishable_eCYnATVmOmS02F7DhSZkew_iUecJvFa';
+const EDM_TOKEN        = 'BLqdRiNdjh1ThN4medtgKPFGP';
+const EDM_API          = 'https://data.edmonton.ca/resource/q7d6-ambg.json';
+
+// ── CLIENTS ─────────────────────────────────────────────
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const map = L.map('map', { zoomControl: false }).setView([53.5300, -113.5000], 12);
+L.control.zoom({ position: 'topright' }).addTo(map);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+  attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/">CARTO</a> | City of Edmonton Open Data',
+  subdomains: 'abcd',
+  maxZoom: 19
+}).addTo(map);
+
+let currentProp  = null;
+let searchTimer  = null;
+let edmCache     = [];
+
+// ── LOAD ALL TRACKED PROPERTIES FROM SUPABASE ───────────
+async function loadProperties() {
+  const { data, error } = await sb.from('properties').select('*');
+  if (error) { console.error(error); return; }
+
+  if (!data || data.length === 0) {
+    document.getElementById('emptyState').style.display = 'block';
+    document.getElementById('demoBanner').style.display = 'block';
+    updateStats([]);
+    return;
+  }
+
+  document.getElementById('emptyState').style.display = 'none';
+  document.getElementById('demoBanner').style.display = 'none';
+  updateStats(data);
+  data.forEach(p => { if (p.lat && p.lng) addMarker(p); });
+}
+
+function updateStats(data) {
+  document.getElementById('stTotal').textContent  = data.length;
+  document.getElementById('stCorp').textContent   = data.filter(p => p.owner_type === 'corporate').length;
+  document.getElementById('stRental').textContent = data.filter(p => p.occupancy_status === 'rental').length;
+}
+
+// ── MARKERS ──────────────────────────────────────────────
+function ownerColor(t) {
+  return t === 'corporate' ? '#dc2626' : t === 'individual' ? '#16a34a' : '#9ca3af';
+}
+function statusLetter(s) {
+  return s === 'rental' ? 'R' : s === 'owner-occupied' ? 'O' : '?';
+}
+function statusBorderColor(status) {
+  if (status === 'rental') return '#2563eb';
+  if (status === 'owner-occupied') return '#dc2626';
+  return '#9ca3af';
+}
+
+function makePieSlices(prop) {
+  // Draw a mini pie chart showing Canada/US/Other ownership
+  // Falls back to single color if no ownership data
+  const ca = prop.ownership_ca || 0;
+  const us = prop.ownership_us || 0;
+  const other = prop.ownership_other || 0;
+  const total = ca + us + other;
+
+  if (total === 0 || prop.owner_type !== 'corporate') {
+    // No pie data — just show a filled circle
+    return `<circle cx="14" cy="14" r="10" fill="${ownerColor(prop.owner_type)}"/>`;
+  }
+
+  // Convert to angles and draw pie slices
+  const colors = ['#dc2626','#2563eb','#9ca3af']; // CA=red, US=blue, Other=gray
+  const values = [ca/total, us/total, other/total];
+  let slices = '';
+  let startAngle = -Math.PI/2;
+
+  values.forEach((v, i) => {
+    if (v <= 0) return;
+    const endAngle = startAngle + v * 2 * Math.PI;
+    const x1 = 14 + 10 * Math.cos(startAngle);
+    const y1 = 14 + 10 * Math.sin(startAngle);
+    const x2 = 14 + 10 * Math.cos(endAngle);
+    const y2 = 14 + 10 * Math.sin(endAngle);
+    const largeArc = v > 0.5 ? 1 : 0;
+    slices += `<path d="M14,14 L${x1.toFixed(2)},${y1.toFixed(2)} A10,10 0 ${largeArc},1 ${x2.toFixed(2)},${y2.toFixed(2)} Z" fill="${colors[i]}"/>`;
+    startAngle = endAngle;
+  });
+  return slices;
+}
+
+function makeIcon(prop) {
+  const borderColor = statusBorderColor(prop.occupancy_status);
+  const pieSlices   = makePieSlices(prop);
+
+  const svg = `<svg width="28" height="36" viewBox="0 0 28 36" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-opacity="0.25"/>
+      </filter>
+    </defs>
+    <!-- Pin shape -->
+    <path d="M14 2 C7.4 2 2 7.4 2 14 C2 21 14 34 14 34 C14 34 26 21 26 14 C26 7.4 20.6 2 14 2Z"
+      fill="white" stroke="${borderColor}" stroke-width="2.5" filter="url(#shadow)"/>
+    <!-- Pie chart inside pin -->
+    <clipPath id="circle-clip">
+      <circle cx="14" cy="14" r="9"/>
+    </clipPath>
+    <g clip-path="url(#circle-clip)">${pieSlices}</g>
+    <!-- Border ring around pie -->
+    <circle cx="14" cy="14" r="9" fill="none" stroke="white" stroke-width="1"/>
+  </svg>`;
+
+  return L.divIcon({
+    className: '',
+    html: svg,
+    iconSize: [28, 36],
+    iconAnchor: [14, 34],
+    popupAnchor: [0, -36]
+  });
+}
+function addMarker(prop) {
+  L.marker([prop.lat, prop.lng], { icon: makeIcon(prop) })
+    .addTo(map)
+    .on('click', () => showPanel(prop));
+}
+
+// ── SEARCH ───────────────────────────────────────────────
+document.getElementById('searchInput').addEventListener('input', function () {
+  clearTimeout(searchTimer);
+  const val = this.value.trim();
+  if (val.length < 3) { hideDropdown(); return; }
+  searchTimer = setTimeout(() => runSearch(val), 400);
+});
+document.addEventListener('click', e => {
+  if (!e.target.closest('.search-wrap')) hideDropdown();
+});
+
+async function runSearch(query) {
+  const dd = document.getElementById('searchDropdown');
+  dd.innerHTML = '<div class="search-msg">Searching…</div>';
+  dd.style.display = 'block';
+
+  // 1. Check our Supabase DB first
+  const { data: tracked } = await sb
+    .from('properties')
+    .select('*')
+    .ilike('civic_address', `%${query}%`)
+    .limit(5);
+
+  // 2. Query Edmonton Open Data
+  const edmResults = await queryEdmonton(query);
+
+  let html = '';
+
+  if (tracked && tracked.length > 0) {
+    tracked.forEach((p, i) => {
+      html += `<div class="search-item" onclick="selectTracked('tracked',${i})">
+        <div class="si-dot" style="background:${ownerColor(p.owner_type)};"></div>
+        <div><div class="si-addr">${p.civic_address}</div>
+        <div class="si-sub">${p.neighbourhood || ''} · Tracked</div></div>
+      </div>`;
+    });
+  }
+  window._trackedCache = tracked;
+
+  edmCache = edmResults;
+  edmResults.forEach((r, i) => {
+    const alreadyTracked = tracked && tracked.some(t => t.edm_account_number === r.account_number);
+    if (!alreadyTracked) {
+      html += `<div class="search-item" onclick="selectFromEdmonton(${i})">
+        <div class="si-dot" style="background:#9ca3af;"></div>
+        <div><div class="si-addr">${r.house_number} ${r.street_name}</div>
+        <div class="si-sub">${r.neighbourhood || ''} · City data — ownership unknown</div></div>
+      </div>`;
+    }
+  });
+
+  dd.innerHTML = html || '<div class="search-msg">No results found.</div>';
+}
+
+async function queryEdmonton(query) {
+  try {
+    const parts = query.trim().split(/\s+/);
+    const houseNum = /^\d+$/.test(parts[0]) ? parts[0] : null;
+    // Use just the first word of the street (e.g. "107" from "107 St NW")
+    // Edmonton stores streets as "107 STREET NW" so matching on number alone is safest
+    const streetNum = (houseNum && parts.length > 1) ? parts[1] : null;
+    let where;
+    if (houseNum && streetNum) {
+      // Match house number (numeric) and first token of street name
+      where = `house_number='${houseNum}' AND upper(street_name) like upper('%${streetNum}%')`;
+    } else if (houseNum) {
+      where = `house_number='${houseNum}'`;
+    } else {
+      where = `upper(street_name) like upper('%${query}%')`;
+    }
+    const url = `${EDM_API}?$$app_token=${EDM_TOKEN}&$limit=6&$where=${encodeURIComponent(where)}`;
+    console.log("Edmonton API request:", url);
+    const res = await fetch(url);
+    console.log("Edmonton API status:", res.status);
+    if (!res.ok) { console.error("Edmonton API bad status:", await res.text()); return []; }
+    const data = await res.json();
+    console.log("Edmonton API results:", data);
+    return data;
+  } catch (e) {
+    console.error("Edmonton API fetch failed:", e);
+    return [];
+  }
+}
+
+function hideDropdown() {
+  document.getElementById('searchDropdown').style.display = 'none';
+}
+
+function selectTracked(type, i) {
+  const prop = window._trackedCache[i];
+  hideDropdown();
+  document.getElementById('searchInput').value = prop.civic_address;
+  if (prop.lat && prop.lng) map.setView([prop.lat, prop.lng], 16);
+  showPanel(prop);
+}
+
+function selectFromEdmonton(i) {
+  const r = edmCache[i];
+  hideDropdown();
+  const address = `${r.house_number} ${r.street_name}`;
+  document.getElementById('searchInput').value = address;
+  const lat = parseFloat(r.latitude);
+  const lng = parseFloat(r.longitude);
+  if (lat && lng) map.setView([lat, lng], 16);
+
+  showPanel({
+    civic_address:      address,
+    neighbourhood:      r.neighbourhood || 'Edmonton',
+    lat, lng,
+    owner_type:         'unknown',
+    owner_name:         null,
+    occupancy_status:   'unknown',
+    unit_count:         null,
+    confidence_score:   10,
+    data_source:        'City of Edmonton Open Data (assessment roll)',
+    edm_account_number: r.account_number,
+    assessed_value:     r.assessed_value,
+    tax_class:          r.tax_class
+  });
+}
+
+// ── PANEL ────────────────────────────────────────────────
+function showPanel(prop) {
+  currentProp = prop;
+
+  const ownerBadge = prop.owner_type === 'corporate'
+    ? `<span class="badge badge-corp">Corporate</span>`
+    : prop.owner_type === 'individual'
+    ? `<span class="badge badge-indiv">Individual</span>`
+    : `<span class="badge badge-unknown">Unknown</span>`;
+
+  const statusBadge = prop.occupancy_status === 'rental'
+    ? `<span class="badge badge-rental">Rental unit</span>`
+    : prop.occupancy_status === 'owner-occupied'
+    ? `<span class="badge badge-owner">Owner-occupied</span>`
+    : `<span class="badge badge-unknown">Unknown</span>`;
+
+  const ownerDisplay = prop.owner_type === 'corporate' && prop.owner_name
+    ? prop.owner_name
+    : prop.owner_type === 'individual'
+    ? 'Private individual'
+    : 'No ownership data yet';
+
+  const score = prop.confidence_score || 0;
+  const confColor = score >= 80 ? '#16a34a' : score >= 50 ? '#f59e0b' : '#dc2626';
+  const assessed = prop.assessed_value
+    ? `$${parseInt(prop.assessed_value).toLocaleString()}`
+    : null;
+
+  document.getElementById('panelInner').innerHTML = `
+    <div class="ph">
+      <div class="ph-hood">
+        <span>${prop.neighbourhood || 'Edmonton'}</span>
+        <button class="ph-close" onclick="closePanel()">×</button>
+      </div>
+      <div class="ph-addr">${prop.civic_address}</div>
+    </div>
+    <div class="pb">
+      <div class="pb-title">Ownership</div>
+      <div class="info-grid">
+        <div class="info-card">
+          <div class="ic-label">Owner type</div>
+          <div class="ic-value">${ownerBadge}</div>
+        </div>
+        <div class="info-card">
+          <div class="ic-label">Occupancy</div>
+          <div class="ic-value">${statusBadge}</div>
+        </div>
+        <div class="info-card wide">
+          <div class="ic-label">Owner / Company</div>
+          <div class="ic-value">${ownerDisplay}</div>
+          ${prop.unit_count ? `<div class="ic-sub">${prop.unit_count} residential units</div>` : ''}
+          ${assessed ? `<div class="ic-sub">Assessed: ${assessed}</div>` : ''}
+          ${prop.tax_class ? `<div class="ic-sub">Type: ${prop.tax_class}</div>` : ''}
+        </div>
+        ${(prop.owner_type === 'corporate' && (prop.ownership_ca || prop.ownership_us || prop.ownership_other)) ? `
+        <div class="info-card wide">
+          <div class="ic-label">Corporate ownership breakdown</div>
+          <div style="display:flex;gap:8px;margin-top:6px;align-items:center;">
+            <div style="flex:1;height:8px;border-radius:4px;overflow:hidden;display:flex;">
+              ${prop.ownership_ca ? `<div style="width:${prop.ownership_ca}%;background:#dc2626;" title="Canada ${prop.ownership_ca}%"></div>` : ''}
+              ${prop.ownership_us ? `<div style="width:${prop.ownership_us}%;background:#2563eb;" title="US ${prop.ownership_us}%"></div>` : ''}
+              ${prop.ownership_other ? `<div style="width:${prop.ownership_other}%;background:#9ca3af;" title="Other ${prop.ownership_other}%"></div>` : ''}
+            </div>
+          </div>
+          <div style="display:flex;gap:12px;margin-top:6px;font-size:11px;color:var(--gray-400);">
+            ${prop.ownership_ca ? `<span><span style="color:#dc2626;">●</span> Canada ${prop.ownership_ca}%</span>` : ''}
+            ${prop.ownership_us ? `<span><span style="color:#2563eb;">●</span> US ${prop.ownership_us}%</span>` : ''}
+            ${prop.ownership_other ? `<span><span style="color:#9ca3af;">●</span> Other ${prop.ownership_other}%</span>` : ''}
+          </div>
+          ${prop.tsx_ticker ? `<div class="ic-sub" style="margin-top:4px;">TSX: ${prop.tsx_ticker}</div>` : ''}
+        </div>` : ''}
+      </div>
+    </div>
+    <div class="pb">
+      <div class="pb-title">Data confidence</div>
+      <div class="conf-label">
+        <span style="font-size:11px;color:var(--gray-400);">How reliable is this data?</span>
+        <span class="conf-pct">${score}%</span>
+      </div>
+      <div class="conf-bar">
+        <div class="conf-fill" style="width:${score}%;background:${confColor};"></div>
+      </div>
+      <div class="conf-src">Source: ${prop.data_source || 'No source recorded'}</div>
+    </div>
+    <div class="pb" style="flex:1;">
+      <div class="pb-title">Community reports</div>
+      <div class="rep-empty">No verified reports yet for this address.</div>
+      <span class="rep-link" onclick="openReport()">+ Report your situation at this address</span>
+    </div>
+  `;
+
+  document.getElementById('panel').classList.add('open');
+  document.getElementById('legend').classList.add('panel-open');
+}
+
+function closePanel() {
+  document.getElementById('panel').classList.remove('open');
+  document.getElementById('legend').classList.remove('panel-open');
+  currentProp = null;
+}
+
+// ── REPORT MODAL ─────────────────────────────────────────
+function openReport() {
+  if (currentProp) document.getElementById('rAddr').value = currentProp.civic_address || '';
+  document.getElementById('reportModal').classList.add('visible');
+}
+function closeReport() {
+  document.getElementById('reportModal').classList.remove('visible');
+  document.getElementById('successMsg').style.display = 'none';
+  document.getElementById('errorMsg').style.display = 'none';
+}
+function handleModalBg(e) {
+  if (e.target === document.getElementById('reportModal')) closeReport();
+}
+function toggleLandlordFields() {
+  const v = document.getElementById('rStatus').value;
+  document.getElementById('landlordFields').style.display = v === 'rental' ? 'block' : 'none';
+}
+
+async function submitReport() {
+  const addr   = document.getElementById('rAddr').value.trim();
+  const status = document.getElementById('rStatus').value;
+  const errEl  = document.getElementById('errorMsg');
+
+  if (!addr || !status) {
+    errEl.textContent = 'Please fill in address and housing situation.';
+    errEl.style.display = 'inline';
+    return;
+  }
+
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Submitting…';
+
+  // Fetch IP anonymously — stored only for mod review, never shown publicly
+  let submitterIp = null;
+  try {
+    const ipRes = await fetch('https://api.ipify.org?format=json');
+    const ipData = await ipRes.json();
+    submitterIp = ipData.ip;
+  } catch(e) { /* non-critical, proceed without IP */ }
+
+  const { error } = await sb.from('submissions').insert({
+    civic_address:   addr,
+    neighbourhood:   document.getElementById('rHood').value    || null,
+    reported_status: status,
+    landlord_type:   document.getElementById('rLandlord').value || null,
+    company_name:    document.getElementById('rCompany').value.trim()  || null,
+    notes:           document.getElementById('rNotes').value.trim()    || null,
+    submitter_ip:    submitterIp
+  });
+
+  btn.disabled = false;
+  btn.textContent = 'Submit anonymously';
+
+  if (error) {
+    console.error(error);
+    errEl.textContent = 'Something went wrong. Please try again.';
+    errEl.style.display = 'inline';
+    return;
+  }
+
+  document.getElementById('successMsg').style.display = 'inline';
+  errEl.style.display = 'none';
+
+  setTimeout(() => {
+    closeReport();
+    ['rAddr','rCompany','rNotes'].forEach(id => document.getElementById(id).value = '');
+    ['rHood','rStatus','rLandlord'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('landlordFields').style.display = 'none';
+  }, 2000);
+}
+
+// ── BOOT ────────────────────────────────────────────────
+loadProperties();
+</script>
+</body>
+</html>

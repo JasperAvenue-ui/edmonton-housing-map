@@ -281,6 +281,18 @@
           </div>
         </div>
       </div>
+      <div id="rentFields" style="display:none;">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Monthly rent (CAD)</label>
+            <input type="text" id="rRent" placeholder="e.g. 1850">
+          </div>
+          <div class="form-group">
+            <label>Date rent was set</label>
+            <input type="text" id="rRentDate" placeholder="e.g. 2024-09">
+          </div>
+        </div>
+      </div>
       <div class="form-group">
         <label>Additional notes (optional)</label>
         <textarea id="rNotes" placeholder="Anything else that would help other residents…"></textarea>
@@ -601,6 +613,7 @@ function showPanel(prop) {
           ${prop.unit_count ? `<div class="ic-sub">${prop.unit_count} residential units</div>` : ''}
           ${assessed ? `<div class="ic-sub">Assessed: ${assessed}</div>` : ''}
           ${prop.tax_class ? `<div class="ic-sub">Type: ${prop.tax_class}</div>` : ''}
+          ${prop.monthly_rent && prop.occupancy_status === 'rental' ? `<div class="ic-sub" style="color:var(--blue);font-weight:500;">Rent: $${prop.monthly_rent.toLocaleString()}/mo${prop.rent_recorded_date ? ' (as of ' + prop.rent_recorded_date + ')' : ''}</div>` : ''}
         </div>
         ${(prop.owner_type === 'corporate' && (prop.ownership_ca || prop.ownership_us || prop.ownership_other)) ? `
         <div class="info-card wide">
@@ -664,7 +677,9 @@ function handleModalBg(e) {
 }
 function toggleLandlordFields() {
   const v = document.getElementById('rStatus').value;
-  document.getElementById('landlordFields').style.display = v === 'rental' ? 'block' : 'none';
+  const isRental = v === 'rental';
+  document.getElementById('landlordFields').style.display = isRental ? 'block' : 'none';
+  document.getElementById('rentFields').style.display     = isRental ? 'block' : 'none';
 }
 
 async function submitReport() {
@@ -695,9 +710,11 @@ async function submitReport() {
     neighbourhood:   document.getElementById('rHood').value    || null,
     reported_status: status,
     landlord_type:   document.getElementById('rLandlord').value || null,
-    company_name:    document.getElementById('rCompany').value.trim()  || null,
-    notes:           document.getElementById('rNotes').value.trim()    || null,
-    submitter_ip:    submitterIp
+    company_name:       document.getElementById('rCompany').value.trim()   || null,
+    notes:              document.getElementById('rNotes').value.trim()     || null,
+    monthly_rent:       parseInt(document.getElementById('rRent').value)   || null,
+    rent_recorded_date: document.getElementById('rRentDate').value.trim()  || null,
+    submitter_ip:       submitterIp
   });
 
   btn.disabled = false;
@@ -715,9 +732,10 @@ async function submitReport() {
 
   setTimeout(() => {
     closeReport();
-    ['rAddr','rCompany','rNotes'].forEach(id => document.getElementById(id).value = '');
+    ['rAddr','rCompany','rNotes','rRent','rRentDate'].forEach(id => document.getElementById(id).value = '');
     ['rHood','rStatus','rLandlord'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('landlordFields').style.display = 'none';
+    document.getElementById('rentFields').style.display = 'none';
   }, 2000);
 }
 

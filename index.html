@@ -1290,12 +1290,12 @@ function handleModalBg(e) {
 }
 function toggleLandlordFields() {
   const v = document.getElementById('rStatus').value;
-  const isRental   = v === 'rental' || v === 'former-renter';
-  const isListing  = v === 'listed';
-  const isLandlord = v === 'rental';
-  document.getElementById('landlordFields').style.display = isLandlord ? 'block' : 'none';
-  document.getElementById('rentFields').style.display     = isRental   ? 'block' : 'none';
-  document.getElementById('listingFields').style.display  = isListing  ? 'block' : 'none';
+  // Show landlord/rent fields for any rental-related option
+  const showRentalFields = ['rental', 'former-renter', 'know-renters', 'listed'].includes(v);
+  const showListing      = v === 'listed';
+  document.getElementById('landlordFields').style.display = showRentalFields ? 'block' : 'none';
+  document.getElementById('rentFields').style.display     = showRentalFields ? 'block' : 'none';
+  document.getElementById('listingFields').style.display  = showListing      ? 'block' : 'none';
 }
 
 async function submitReport() {

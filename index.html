@@ -683,16 +683,25 @@ async function loadReports(prop) {
       : s.landlord_type === 'individual' ? 'Private landlord'
       : '';
 
-    return \`<div style="padding:8px 0;border-bottom:1px solid var(--gray-100);">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
-        <div style="font-size:12px;color:var(--gray-700);font-weight:500;">\${status}</div>
-        <div style="font-size:10px;color:var(--gray-400);white-space:nowrap;">\${date}</div>
-      </div>
-      \${landlord ? \`<div style="font-size:11px;color:var(--gray-400);margin-top:2px;">\${landlord}\${s.company_name ? ' — ' + s.company_name : ''}</div>\` : ''}
-      \${s.monthly_rent ? \`<div style="font-size:12px;font-weight:600;color:var(--blue);margin-top:4px;background:#dbeafe;display:inline-block;padding:2px 8px;border-radius:4px;">$\${s.monthly_rent.toLocaleString()}/mo</div>\` : ''}
-      \${s.notes ? \`<div style="font-size:11px;color:var(--gray-600);margin-top:4px;font-style:italic;">"\${s.notes}"</div>\` : ''}
-      <div style="font-size:10px;color:var(--gray-400);margin-top:3px;">Source: Community report</div>
-    </div>\`;
+    const rentBadge = s.monthly_rent
+      ? '<div style="font-size:12px;font-weight:600;color:#1d4ed8;margin-top:4px;background:#dbeafe;display:inline-block;padding:2px 8px;border-radius:4px;">$' + s.monthly_rent.toLocaleString() + '/mo</div>'
+      : '';
+    const landlordLine = landlord
+      ? '<div style="font-size:11px;color:#9ca3af;margin-top:2px;">' + landlord + (s.company_name ? ' — ' + s.company_name : '') + '</div>'
+      : '';
+    const notesLine = s.notes
+      ? '<div style="font-size:11px;color:#4b5563;margin-top:4px;font-style:italic;">"' + s.notes + '"</div>'
+      : '';
+    return '<div style="padding:8px 0;border-bottom:1px solid #f3f4f6;">'
+      + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">'
+      + '<div style="font-size:12px;color:#374151;font-weight:500;">' + status + '</div>'
+      + '<div style="font-size:10px;color:#9ca3af;white-space:nowrap;">' + date + '</div>'
+      + '</div>'
+      + landlordLine
+      + rentBadge
+      + notesLine
+      + '<div style="font-size:10px;color:#9ca3af;margin-top:3px;">Source: Community report</div>'
+      + '</div>';
   }).join('');
 }
 

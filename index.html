@@ -282,6 +282,10 @@
           <option value="rental">I rent this unit from a landlord</option>
           <option value="owner-occupied">I own this and live here</option>
           <option value="owner-renting">I own this and rent to others</option>
+          <option value="know-owners">I know the people that own it</option>
+          <option value="know-renters">I know the people that rent it</option>
+          <option value="former-renter">I used to rent it</option>
+          <option value="listed">Currently listed for this price</option>
           <option value="unknown">I live here but unsure of ownership</option>
         </select>
       </div>
@@ -306,6 +310,17 @@
         <div class="form-group">
           <label>Monthly rent (CAD)</label>
           <input type="text" id="rRent" placeholder="e.g. 1850">
+        </div>
+      </div>
+      <div id="listingFields" style="display:none;">
+        <div class="form-group">
+          <label>Listed price (CAD/mo)</label>
+          <input type="text" id="rListingPrice" placeholder="e.g. 2100">
+        </div>
+        <div class="form-group">
+          <label>Link to listing</label>
+          <input type="text" id="rListingUrl" placeholder="e.g. https://www.rentfaster.ca/...">
+          <div class="form-note">Paste the full URL of the listing you found.</div>
         </div>
       </div>
       <div class="form-group">
@@ -700,9 +715,10 @@ function showPanel(prop) {
         <div class="info-card wide">
           <div class="ic-label">Owner / Company</div>
           <div class="ic-value">${ownerDisplay}</div>
-          ${prop.unit_count ? `<div class="ic-sub">${prop.unit_count} residential units</div>` : ''}
+          ${prop.unit_count ? `<div class="ic-sub" style="font-weight:500;">${prop.unit_count} residential units</div>` : '<div class="ic-sub">Unit count unknown</div>'}
           ${assessed ? `<div class="ic-sub">Assessed: ${assessed}</div>` : ''}
           ${prop.tax_class ? `<div class="ic-sub">Type: ${prop.tax_class}</div>` : ''}
+          ${prop.listing_url ? `<div class="ic-sub"><a href="${prop.listing_url}" target="_blank" style="color:var(--blue);">View listing →</a></div>` : ''}
           ${prop.monthly_rent && prop.occupancy_status === 'rental' ? `<div class="ic-sub" style="color:var(--blue);font-weight:500;">Rent: $${prop.monthly_rent.toLocaleString()}/mo${prop.rent_recorded_date ? ' (as of ' + prop.rent_recorded_date + ')' : ''}</div>` : ''}
         </div>
         ${(prop.owner_type === 'corporate' && (prop.ownership_ca || prop.ownership_us || prop.ownership_other)) ? `
@@ -821,9 +837,12 @@ function handleModalBg(e) {
 }
 function toggleLandlordFields() {
   const v = document.getElementById('rStatus').value;
-  const isRental = v === 'rental';
-  document.getElementById('landlordFields').style.display = isRental ? 'block' : 'none';
-  document.getElementById('rentFields').style.display     = isRental ? 'block' : 'none';
+  const isRental   = v === 'rental' || v === 'former-renter';
+  const isListing  = v === 'listed';
+  const isLandlord = v === 'rental';
+  document.getElementById('landlordFields').style.display = isLandlord ? 'block' : 'none';
+  document.getElementById('rentFields').style.display     = isRental   ? 'block' : 'none';
+  document.getElementById('listingFields').style.display  = isListing  ? 'block' : 'none';
 }
 
 async function submitReport() {
@@ -857,6 +876,7 @@ async function submitReport() {
     company_name:       document.getElementById('rCompany').value.trim()   || null,
     notes:              document.getElementById('rNotes').value.trim()     || null,
     monthly_rent:       parseInt(document.getElementById('rRent').value)   || null,
+    listing_url:        document.getElementById('rListingUrl') ? document.getElementById('rListingUrl').value.trim() || null : null,
     submitter_ip:       submitterIp
   });
 
@@ -875,10 +895,11 @@ async function submitReport() {
 
   setTimeout(() => {
     closeReport();
-    ['rAddr','rCompany','rNotes','rRent'].forEach(id => document.getElementById(id).value = '');
+    ['rAddr','rCompany','rNotes','rRent','rListingPrice','rListingUrl'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
     ['rHood','rStatus','rLandlord'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('landlordFields').style.display = 'none';
     document.getElementById('rentFields').style.display = 'none';
+    document.getElementById('listingFields').style.display = 'none';
   }, 2000);
 }
 

@@ -426,7 +426,11 @@ function submissionCard(s) {
         </div>
         ${s.monthly_rent ? `<div class="sub-field">
           <div class="sf-label">Monthly rent</div>
-          <div class="sf-value" style="color:var(--blue);font-weight:500;">$${s.monthly_rent.toLocaleString()}/mo${s.rent_recorded_date ? '<br><span style="font-weight:400;color:var(--gray-400);">as of ' + s.rent_recorded_date + '</span>' : ''}</div>
+          <div class="sf-value" style="color:var(--blue);font-weight:500;">$${s.monthly_rent.toLocaleString()}/mo</div>
+        </div>` : ''}
+        ${s.listing_url ? `<div class="sub-field" style="grid-column:1/-1;">
+          <div class="sf-label">Listing URL</div>
+          <div class="sf-value"><a href="${s.listing_url}" target="_blank" style="color:var(--blue);word-break:break-all;">${s.listing_url}</a></div>
         </div>` : ''}
       </div>
       ${s.notes ? `<div class="sub-notes">"${s.notes}"</div>` : ''}
@@ -640,6 +644,10 @@ function formatStatus(s) {
   return s === 'rental'        ? 'Renting from landlord'
     : s === 'owner-occupied'   ? 'Owner-occupied'
     : s === 'owner-renting'    ? 'Owner renting to others'
+    : s === 'know-owners'      ? 'Knows the owners'
+    : s === 'know-renters'     ? 'Knows the renters'
+    : s === 'former-renter'    ? 'Former renter'
+    : s === 'listed'           ? 'Currently listed'
     : s === 'unknown'          ? 'Unsure'
     : s || '—';
 }

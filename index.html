@@ -272,6 +272,89 @@
   </div>
 </div>
 
+<!-- NEW ADDRESS MODAL -->
+<div id="newAddrModal" onclick="handleNewAddrBg(event)" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(11,25,41,0.65);align-items:center;justify-content:center;">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">Add a new address</div>
+        <div class="modal-sub">Pin this location on the map and submit what you know</div>
+      </div>
+      <button class="modal-close" onclick="closeNewAddrModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="notice">
+        📍 We need coordinates to place a pin. Paste a <strong>Google Maps link</strong> for this address to get them automatically.
+      </div>
+      <div class="form-group">
+        <label>Street address *</label>
+        <input type="text" id="naAddr" placeholder="e.g. 17311 69 Ave NW">
+      </div>
+      <div class="form-group">
+        <label>Google Maps link *</label>
+        <input type="text" id="naGmaps" placeholder="Paste a Google Maps link here…" oninput="parseGmapsLink(this.value)">
+        <div class="form-note">Open Google Maps → search this address → click Share → Copy link. Paste it here.</div>
+        <div id="naCoordPreview" style="font-size:12px;margin-top:6px;display:none;">
+          <span style="color:#16a34a;font-weight:500;">✓ Coordinates found: </span>
+          <span id="naCoordText" style="font-family:monospace;color:#374151;"></span>
+        </div>
+        <div id="naCoordError" style="font-size:12px;color:#dc2626;margin-top:6px;display:none;">
+          Couldn't read coordinates from that link. Try copying the full URL from your browser address bar after searching on Google Maps.
+        </div>
+      </div>
+      <input type="hidden" id="naLat">
+      <input type="hidden" id="naLng">
+      <div class="form-group">
+        <label>Your housing situation *</label>
+        <select id="naStatus" onchange="toggleNaLandlord()">
+          <option value="">Select…</option>
+          <option value="rental">I rent this unit from a landlord</option>
+          <option value="owner-occupied">I own this and live here</option>
+          <option value="owner-renting">I own this and rent to others</option>
+          <option value="know-owners">I know the people that own it</option>
+          <option value="know-renters">I know the people that rent it</option>
+          <option value="former-renter">I used to rent it</option>
+          <option value="listed">Currently listed for this price</option>
+          <option value="unknown">I live here but unsure of ownership</option>
+        </select>
+      </div>
+      <div id="naLandlordFields" style="display:none;">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Landlord type</label>
+            <select id="naLandlord">
+              <option value="">Select…</option>
+              <option value="corporate">A company or corporation</option>
+              <option value="individual">A private individual</option>
+              <option value="unknown">I don't know</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Company name (if known)</label>
+            <input type="text" id="naCompany" placeholder="e.g. Boardwalk REIT">
+          </div>
+        </div>
+      </div>
+      <div id="naRentFields" style="display:none;">
+        <div class="form-group">
+          <label>Monthly rent (CAD)</label>
+          <input type="text" id="naRent" placeholder="e.g. 1850">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Additional notes (optional)</label>
+        <textarea id="naNotes" placeholder="Anything else that would help other residents…"></textarea>
+      </div>
+      <div class="form-actions">
+        <button class="btn-primary" id="naSubmitBtn" onclick="submitNewAddress()">Submit for review</button>
+        <button class="btn-sec" onclick="closeNewAddrModal()">Cancel</button>
+        <span class="success-msg" id="naSuccessMsg">✓ Submitted — a moderator will review this.</span>
+        <span class="error-msg" id="naErrorMsg"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="reportModal" onclick="handleModalBg(event)">
   <div class="modal-box">
     <div class="modal-header">
@@ -714,7 +797,16 @@ async function runSearch(query) {
     }
   });
 
-  dd.innerHTML = html || '<div class="search-msg">No results found.</div>';
+  if (!html) {
+    const searchedAddr = document.getElementById('searchInput').value.trim();
+    dd.innerHTML = `<div class="search-msg" style="padding:14px 16px;">
+      <div style="font-size:13px;color:#374151;font-weight:500;">No results found for "${searchedAddr}"</div>
+      <div style="font-size:12px;color:#9ca3af;margin-top:4px;">This address isn't in our data yet.</div>
+      <div onclick="openNewAddressForm('${searchedAddr.replace(/'/g, "\'")}')" style="margin-top:10px;font-size:13px;color:#2563eb;cursor:pointer;font-weight:500;">+ Add this address to the map →</div>
+    </div>`;
+  } else {
+    dd.innerHTML = html;
+  }
 }
 
 async function queryEdmonton(query) {
@@ -1055,6 +1147,129 @@ function closePanel() {
   document.getElementById('panel').classList.remove('open');
   document.getElementById('legend').classList.remove('panel-open');
   currentProp = null;
+}
+
+// ── NEW ADDRESS MODAL ────────────────────────────────────
+function openNewAddressForm(addr) {
+  hideDropdown();
+  document.getElementById('naAddr').value = addr || '';
+  document.getElementById('naGmaps').value = '';
+  document.getElementById('naLat').value = '';
+  document.getElementById('naLng').value = '';
+  document.getElementById('naCoordPreview').style.display = 'none';
+  document.getElementById('naCoordError').style.display = 'none';
+  document.getElementById('naStatus').value = '';
+  document.getElementById('naLandlordFields').style.display = 'none';
+  document.getElementById('naRentFields').style.display = 'none';
+  document.getElementById('naSuccessMsg').style.display = 'none';
+  document.getElementById('naErrorMsg').style.display = 'none';
+  document.getElementById('newAddrModal').style.display = 'flex';
+}
+
+function closeNewAddrModal() {
+  document.getElementById('newAddrModal').style.display = 'none';
+}
+
+function handleNewAddrBg(e) {
+  if (e.target === document.getElementById('newAddrModal')) closeNewAddrModal();
+}
+
+function toggleNaLandlord() {
+  const v = document.getElementById('naStatus').value;
+  const isRental = v === 'rental' || v === 'former-renter';
+  document.getElementById('naLandlordFields').style.display = v === 'rental' ? 'block' : 'none';
+  document.getElementById('naRentFields').style.display    = isRental ? 'block' : 'none';
+}
+
+function parseGmapsLink(url) {
+  const preview  = document.getElementById('naCoordPreview');
+  const errEl    = document.getElementById('naCoordError');
+  const coordTxt = document.getElementById('naCoordText');
+  preview.style.display = 'none';
+  errEl.style.display   = 'none';
+
+  if (!url || url.length < 10) return;
+
+  // Try to extract @lat,lng from full Google Maps URL
+  // Format: https://www.google.com/maps/place/.../@53.5461,-113.4938,17z/...
+  const atMatch = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+  if (atMatch) {
+    const lat = parseFloat(atMatch[1]);
+    const lng = parseFloat(atMatch[2]);
+    document.getElementById('naLat').value = lat;
+    document.getElementById('naLng').value = lng;
+    coordTxt.textContent = lat.toFixed(6) + ', ' + lng.toFixed(6);
+    preview.style.display = 'block';
+    return;
+  }
+
+  // Try query param format: ?q=lat,lng
+  const qMatch = url.match(/[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)/);
+  if (qMatch) {
+    const lat = parseFloat(qMatch[1]);
+    const lng = parseFloat(qMatch[2]);
+    document.getElementById('naLat').value = lat;
+    document.getElementById('naLng').value = lng;
+    coordTxt.textContent = lat.toFixed(6) + ', ' + lng.toFixed(6);
+    preview.style.display = 'block';
+    return;
+  }
+
+  // Short URL or unrecognized format
+  if (url.includes('goo.gl') || url.includes('maps.app')) {
+    errEl.textContent = "This is a short link — open it in your browser, then copy the full URL from the address bar and paste it here.";
+  } else {
+    errEl.textContent = "Couldn't read coordinates from that link. Try copying the full URL from your browser address bar after searching on Google Maps.";
+  }
+  errEl.style.display = 'block';
+}
+
+async function submitNewAddress() {
+  const addr   = document.getElementById('naAddr').value.trim();
+  const lat    = parseFloat(document.getElementById('naLat').value);
+  const lng    = parseFloat(document.getElementById('naLng').value);
+  const status = document.getElementById('naStatus').value;
+  const errEl  = document.getElementById('naErrorMsg');
+
+  if (!addr) { errEl.textContent = 'Please enter the street address.'; errEl.style.display = 'inline'; return; }
+  if (!lat || !lng) { errEl.textContent = 'Please paste a Google Maps link so we can get the coordinates.'; errEl.style.display = 'inline'; return; }
+  if (!status) { errEl.textContent = 'Please select your housing situation.'; errEl.style.display = 'inline'; return; }
+
+  const btn = document.getElementById('naSubmitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Submitting…';
+
+  let submitterIp = null;
+  try {
+    const ipRes = await fetch('https://api.ipify.org?format=json');
+    submitterIp = (await ipRes.json()).ip;
+  } catch(e) {}
+
+  const { error } = await sb.from('submissions').insert({
+    civic_address:   addr,
+    neighbourhood:   null,
+    reported_status: status,
+    landlord_type:   document.getElementById('naLandlord').value || null,
+    company_name:    document.getElementById('naCompany').value.trim() || null,
+    monthly_rent:    parseInt(document.getElementById('naRent').value) || null,
+    notes:           document.getElementById('naNotes').value.trim() || null,
+    submitter_ip:    submitterIp,
+    // Store coords in notes so mod can use them on approval
+    reviewer_note:   'NEW ADDRESS — coords: ' + lat.toFixed(6) + ',' + lng.toFixed(6)
+  });
+
+  btn.disabled = false;
+  btn.textContent = 'Submit for review';
+
+  if (error) {
+    errEl.textContent = 'Something went wrong. Please try again.';
+    errEl.style.display = 'inline';
+    return;
+  }
+
+  document.getElementById('naSuccessMsg').style.display = 'inline';
+  errEl.style.display = 'none';
+  setTimeout(closeNewAddrModal, 2500);
 }
 
 // ── REPORT MODAL ─────────────────────────────────────────

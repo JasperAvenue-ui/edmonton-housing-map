@@ -337,6 +337,11 @@ const EDM_API          = 'https://data.edmonton.ca/resource/q7d6-ambg.json';
 // ── CLIENTS ─────────────────────────────────────────────
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+let currentProp  = null;
+let searchTimer  = null;
+let edmCache     = [];
+let clusterGroup = null;
+
 const map = L.map('map', { zoomControl: false }).setView([53.5300, -113.5000], 12);
 L.control.zoom({ position: 'topright' }).addTo(map);
 L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
@@ -386,6 +391,21 @@ clusterGroup = L.markerClusterGroup({
       + pieSvg
       + '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="white" stroke-width="2"/>'
       + '<text x="' + cx + '" y="' + (cy + 4) + '" text-anchor="middle" font-size="' + (total > 99 ? 10 : 11) + '" font-weight="600" font-family="IBM Plex Mono,monospace" fill="white">' + total + '</text>'
+      + (function() {
+          const flags = [{count: rentals, emoji: '🇨🇦'}, {count: owned, emoji: '🇺🇸'}, {count: unknown, emoji: '🌍'}].filter(f => f.count > 0);
+          if (flags.length <= 1) return '';
+          let flagSvg = ''; let fa = -Math.PI/2;
+          flags.forEach(f => {
+            const pct = f.count / total;
+            const midAngle = fa + pct * Math.PI;
+            const fr = r * 0.6;
+            const fx = (cx + fr * Math.cos(midAngle)).toFixed(1);
+            const fy = (cy + fr * Math.sin(midAngle) + 4).toFixed(1);
+            flagSvg += '<text x="' + fx + '" y="' + fy + '" text-anchor="middle" font-size="' + Math.max(8, size/5) + '">' + f.emoji + '</text>';
+            fa += pct * 2 * Math.PI;
+          });
+          return flagSvg;
+        })()
       + '</svg>';
 
     return L.divIcon({
@@ -398,10 +418,7 @@ clusterGroup = L.markerClusterGroup({
 });
 clusterGroup.addTo(map);
 
-let currentProp  = null;
-let searchTimer  = null;
-let edmCache     = [];
-let clusterGroup = null;
+
 
 // ── LOAD ALL TRACKED PROPERTIES FROM SUPABASE ───────────
 async function loadProperties() {

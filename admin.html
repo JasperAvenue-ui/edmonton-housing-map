@@ -521,6 +521,24 @@ async function approve(id) {
   const ownerType = sub.landlord_type === 'corporate' ? 'corporate'
     : sub.landlord_type === 'individual' ? 'individual' : 'unknown';
 
+  // Look up ownership data from known_corporations if corporate
+  let ownershipCa = null, ownershipUs = null, ownershipOther = null, tsxTicker = null;
+  if (ownerType === 'individual') {
+    ownershipCa = 100; ownershipUs = 0; ownershipOther = 0;
+  } else if (ownerType === 'corporate' && sub.company_name) {
+    const { data: corp } = await sb
+      .from('known_corporations')
+      .select('ownership_ca, ownership_us, ownership_other, tsx_ticker')
+      .or(`legal_name.ilike.%${sub.company_name}%,common_name.ilike.%${sub.company_name}%`)
+      .limit(1);
+    if (corp && corp.length > 0) {
+      ownershipCa    = corp[0].ownership_ca;
+      ownershipUs    = corp[0].ownership_us;
+      ownershipOther = corp[0].ownership_other;
+      tsxTicker      = corp[0].tsx_ticker;
+    }
+  }
+
   const occupancyStatus = sub.reported_status === 'rental'        ? 'rental'
     : sub.reported_status === 'owner-occupied' ? 'owner-occupied'
     : sub.reported_status === 'owner-renting'  ? 'rental' : 'unknown';
@@ -542,6 +560,10 @@ async function approve(id) {
       owner_name:       sub.company_name || null,
       monthly_rent:     sub.monthly_rent || null,
       rent_recorded_date: sub.rent_recorded_date || null,
+      ownership_ca:     ownershipCa,
+      ownership_us:     ownershipUs,
+      ownership_other:  ownershipOther,
+      tsx_ticker:       tsxTicker,
       confidence_score: newConfidence,
       data_source:      'Community report (mod-approved)',
       last_updated:     new Date().toISOString()
@@ -557,6 +579,10 @@ async function approve(id) {
       occupancy_status:   occupancyStatus,
       monthly_rent:       sub.monthly_rent     || null,
       rent_recorded_date: sub.rent_recorded_date || null,
+      ownership_ca:       ownershipCa,
+      ownership_us:       ownershipUs,
+      ownership_other:    ownershipOther,
+      tsx_ticker:         tsxTicker,
       confidence_score:   lat ? 60 : 40,
       data_source:        'Community report (mod-approved)',
       edm_account_number: edmAccountNumber,

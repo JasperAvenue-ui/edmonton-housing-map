@@ -211,10 +211,14 @@
     </div>
 
     <div id="legend">
-      <div class="legend-title">Pin border</div>
-      <div class="legend-row"><div class="l-dot" style="background:var(--blue);"></div> Rental unit</div>
-      <div class="legend-row"><div class="l-dot" style="background:var(--red);"></div> Owner-occupied</div>
+      <div class="legend-title">Pin colour</div>
+      <div class="legend-row"><div class="l-dot" style="background:var(--red);"></div> Corporate owned</div>
+      <div class="legend-row"><div class="l-dot" style="background:var(--green);"></div> Individual owned</div>
       <div class="legend-row"><div class="l-dot" style="background:var(--gray-400);"></div> Unknown</div>
+      <div style="border-top:1px solid rgba(255,255,255,0.1);margin:7px 0;"></div>
+      <div class="legend-title">Inner ring</div>
+      <div class="legend-row"><div class="l-dot" style="background:var(--blue);border:2px solid var(--blue);background:transparent;"></div> Rental unit</div>
+      <div class="legend-row"><div class="l-dot" style="background:transparent;border:2px solid var(--red);"></div> Owner-occupied</div>
       <div style="border-top:1px solid rgba(255,255,255,0.1);margin:7px 0;"></div>
       <div class="legend-title">Pie chart</div>
       <div class="legend-row"><div class="l-dot" style="background:#dc2626;"></div> Canada</div>
@@ -410,14 +414,14 @@ function makeIcon(prop) {
     </defs>
     <!-- Pin shape -->
     <path d="M14 2 C7.4 2 2 7.4 2 14 C2 21 14 34 14 34 C14 34 26 21 26 14 C26 7.4 20.6 2 14 2Z"
-      fill="white" stroke="${borderColor}" stroke-width="2.5" filter="url(#shadow)"/>
+      fill="${ownerColor(prop.owner_type)}" stroke="white" stroke-width="2"/>
     <!-- Pie chart inside pin -->
     <clipPath id="circle-clip">
       <circle cx="14" cy="14" r="9"/>
     </clipPath>
     <g clip-path="url(#circle-clip)">${pieSlices}</g>
     <!-- Border ring around pie -->
-    <circle cx="14" cy="14" r="9" fill="none" stroke="white" stroke-width="1"/>
+    <circle cx="14" cy="14" r="9" fill="none" stroke="${borderColor}" stroke-width="1.5"/>
   </svg>`;
 
   return L.divIcon({

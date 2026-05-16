@@ -481,6 +481,7 @@ let allProperties    = [];  // full dataset in memory
 let hoodSummaries    = {};  // neighbourhood -> {total, rentals, owned, unknown, lat, lng}
 let hoodLayers       = [];  // current neighbourhood bubble layers
 let edmPropertyIndex = {};  // account_number -> supabase verified data
+let corpIndex        = {};  // account_number -> corporate data
 let dataLoaded       = false;
 
 async function loadProperties() {
@@ -496,6 +497,14 @@ async function loadProperties() {
     });
     updateStats(verified);
   }
+
+  // Load corporate data and index by account number
+  try {
+    const corpRes  = await fetch('/corporate-properties.json');
+    const corpData = await corpRes.json();
+    corpData.forEach(p => { if (p.id) corpIndex[p.id] = p; });
+    console.log(`Loaded ${corpData.length} corporate properties`);
+  } catch(e) { console.warn('Could not load corporate data:', e); }
 
   // Load static JSON
   try {
@@ -516,11 +525,30 @@ async function loadProperties() {
         cols.forEach((c, idx) => r[c] = row[idx]);
         if (!r.lat || !r.lng || !r.addr) return;
 
-        const vData = edmPropertyIndex[r.id] || null;
+        const vData    = edmPropertyIndex[r.id] || null;
+        const corpData = corpIndex[r.id]         || null;
         const prop = vData ? {
           ...vData,
           civic_address: r.addr, neighbourhood: r.hood,
           lat: r.lat, lng: r.lng, tax_class: r.type, assessed_value: r.val
+        } : corpData ? {
+          civic_address:    r.addr,
+          neighbourhood:    r.hood,
+          lat:              r.lat,
+          lng:              r.lng,
+          owner_type:       'corporate',
+          owner_name:       corpData.owner,
+          occupancy_status: 'rental',
+          unit_count:       corpData.units    || null,
+          confidence_score: 85,
+          data_source:      corpData.source   || 'TSX public disclosure',
+          edm_account_number: r.id,
+          tsx_ticker:       corpData.ticker   || null,
+          ownership_ca:     corpData.ownership_ca,
+          ownership_us:     corpData.ownership_us,
+          ownership_other:  corpData.ownership_other,
+          assessed_value:   r.val,
+          tax_class:        r.type
         } : {
           civic_address: r.addr, neighbourhood: r.hood,
           lat: r.lat, lng: r.lng,

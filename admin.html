@@ -218,25 +218,30 @@
     <div class="page-title">Moderation dashboard</div>
     <div class="page-sub">Review citizen submissions before they appear on the public map.</div>
 
-    <div class="stats-row">
-      <div class="stat-card">
-        <div class="stat-num" id="statPending">—</div>
-        <div class="stat-label">Pending review</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-num" id="statApproved">—</div>
-        <div class="stat-label">Approved</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-num" id="statProperties">—</div>
-        <div class="stat-label">Live properties</div>
-      </div>
-    </div>
+    <div class="stats-row" style="grid-template-columns: repeat(4, 1fr);">
+  <div class="stat-card">
+    <div class="stat-num" id="statPending">—</div>
+    <div class="stat-label">Pending review</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num" id="statApproved">—</div>
+    <div class="stat-label">Approved</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num" id="statProperties">—</div>
+    <div class="stat-label">Live properties</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num" id="statBugs">—</div>
+    <div class="stat-label">Bug reports</div>
+  </div>
+</div>
 
     <div class="tabs">
       <div class="tab active" onclick="switchTab('pending')">Pending</div>
       <div class="tab" onclick="switchTab('approved')">Approved</div>
       <div class="tab" onclick="switchTab('properties')">Live properties</div>
+    <div class="tab" onclick="switchTab('bugs')">Bugs</div>
     </div>
 
     <div id="tabContent"></div>
@@ -311,7 +316,7 @@ function showAdmin(user) {
 
 // ── LOAD DATA ────────────────────────────────────────────
 async function loadAll() {
-  await Promise.all([loadSubmissions(), loadPropertyCount()]);
+  await Promise.all([loadSubmissions(), loadPropertyCount(), loadBugCount()]);
 }
 
 async function loadSubmissions() {
@@ -345,9 +350,10 @@ async function loadPropertyCount() {
 function switchTab(tab) {
   currentTab = tab;
   document.querySelectorAll('.tab').forEach((el, i) => {
-    el.classList.toggle('active', ['pending','approved','properties'][i] === tab);
+    el.classList.toggle('active', ['pending','approved','properties','bugs'][i] === tab);
   });
-  renderTab(tab);
+  if (tab === 'bugs') renderBugs();
+  else renderTab(tab);
 }
 
 async function renderTab(tab) {
@@ -664,7 +670,55 @@ document.addEventListener('keydown', e => {
     login();
   }
 });
+// ── BUGS ─────────────────────────────────────────────────
+async function loadBugCount() {
+  const { count } = await sb.from('bugs').select('*', { count: 'exact', head: true });
+  document.getElementById('statBugs').textContent = count ?? 0;
+}
 
+async function renderBugs() {
+  const el = document.getElementById('tabContent');
+  el.innerHTML = '<div class="loading">Loading bug reports…</div>';
+  const { data, error } = await sb.from('bugs').select('*').order('submitted_at', { ascending: false });
+  if (error || !data || data.length === 0) {
+    el.innerHTML = '<div class="empty-state"><h3>No bug reports yet</h3><p>Bug reports submitted through the map will appear here.</p></div>';
+    return;
+  }
+  el.innerHTML = '<div class="section-title">' + data.length + ' bug reports</div>' +
+    data.map(b => bugCard(b)).join('');
+}
+
+function bugCard(b) {
+  const submitted = new Date(b.submitted_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const priorityColor = b.priority === 'asap' ? 'var(--red)' : b.priority === 'not-urgent' ? 'var(--amber)' : b.priority === 'ignore' ? 'var(--gray-400)' : 'var(--blue)';
+  const priorityLabel = b.priority === 'asap' ? '🔴 Fix ASAP' : b.priority === 'not-urgent' ? '🟡 Not urgent' : b.priority === 'ignore' ? '⚪ Ignore' : '⚫ Unreviewed';
+  return `
+    <div class="sub-card" id="bug-${b.id}" style="border-left: 3px solid ${priorityColor};">
+      <div class="sub-header">
+        <div>
+          <div class="sub-addr" style="font-size:13px;">${b.description}</div>
+          <div class="sub-meta">Page: ${b.page || 'unknown'} · ${submitted}</div>
+          ${b.submitter_ip ? `<div class="sub-meta" style="font-family:var(--mono);font-size:10px;">IP: ${b.submitter_ip}</div>` : ''}
+        </div>
+        <span style="font-size:12px;font-weight:600;color:${priorityColor};white-space:nowrap;">${priorityLabel}</span>
+      </div>
+      <div class="sub-actions">
+        <button class="btn-approve" style="background:var(--red);" onclick="setBugPriority('${b.id}','asap')">Fix ASAP</button>
+        <button class="btn-approve" style="background:var(--amber);color:var(--amber-dark);" onclick="setBugPriority('${b.id}','not-urgent')">Not urgent</button>
+        <button class="btn-reject" onclick="setBugPriority('${b.id}','ignore')">Ignore</button>
+        <span class="action-result" id="bugresult-${b.id}"></span>
+      </div>
+    </div>`;
+}
+
+async function setBugPriority(id, priority) {
+  const resultEl = document.getElementById(`bugresult-${id}`);
+  const { error } = await sb.from('bugs').update({ priority }).eq('id', id);
+  if (error) { resultEl.textContent = 'Error'; resultEl.className = 'action-result err'; return; }
+  resultEl.textContent = '✓ Saved';
+  resultEl.className = 'action-result ok';
+  setTimeout(() => renderBugs(), 600);
+}
 // ── BOOT ─────────────────────────────────────────────────
 checkSession();
 

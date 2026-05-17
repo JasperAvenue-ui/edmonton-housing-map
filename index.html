@@ -198,8 +198,7 @@
   .logo-sub { display: none; }
   .divider { display: none; }
   #btnReport { font-size: 11px; padding: 6px 10px; }
-  #panel.open { width: 100vw; }
-  --panel-w: 100vw;
+  #panel.open { width: 100vw; border-left: none; }
   #legend { bottom: 8px; right: 8px; padding: 6px 10px; font-size: 10px; max-width: 140px; }
 #legend.panel-open { right: 8px; }
 .legend-title { font-size: 9px; margin-bottom: 4px; }
@@ -237,6 +236,7 @@
     </div>
     <button id="btnReport" onclick="openReport()">+ Report your housing status</button>
     <a href="/about.html" style="font-family:var(--mono);font-size:11px;color:rgba(255,255,255,0.5);text-decoration:none;letter-spacing:0.04em;flex-shrink:0;">About</a>
+  <button onclick="openBugReport()" style="background:none;border:1px solid rgba(255,255,255,0.2);color:rgba(255,255,255,0.5);padding:6px 12px;border-radius:7px;font-family:var(--mono);font-size:11px;cursor:pointer;flex-shrink:0;white-space:nowrap;">Report a bug</button>
   </div>
 
   <div id="main">
@@ -1403,9 +1403,70 @@ async function submitReport() {
     document.getElementById('listingFields').style.display = 'none';
   }, 2000);
 }
-
+// ── BUG REPORT ───────────────────────────────────────────
+function openBugReport() {
+  document.getElementById('bugDesc').value = '';
+  document.getElementById('bugPage').value = 'map';
+  document.getElementById('bugSuccessMsg').style.display = 'none';
+  document.getElementById('bugErrorMsg').style.display = 'none';
+  document.getElementById('bugModal').style.display = 'flex';
+}
+function closeBugModal() {
+  document.getElementById('bugModal').style.display = 'none';
+}
+async function submitBug() {
+  const desc = document.getElementById('bugDesc').value.trim();
+  const errEl = document.getElementById('bugErrorMsg');
+  if (!desc) { errEl.textContent = 'Please describe the bug.'; errEl.style.display = 'inline'; return; }
+  const btn = document.getElementById('bugSubmitBtn');
+  btn.disabled = true; btn.textContent = 'Submitting…';
+  let ip = null;
+  try { ip = (await (await fetch('https://api.ipify.org?format=json')).json()).ip; } catch(e) {}
+  const { error } = await sb.from('bugs').insert({
+    description: desc,
+    page: document.getElementById('bugPage').value,
+    submitter_ip: ip
+  });
+  btn.disabled = false; btn.textContent = 'Submit';
+  if (error) { errEl.textContent = 'Something went wrong.'; errEl.style.display = 'inline'; return; }
+  document.getElementById('bugSuccessMsg').style.display = 'inline';
+  errEl.style.display = 'none';
+  setTimeout(closeBugModal, 2000);
+}
 // ── BOOT ────────────────────────────────────────────────
 loadProperties();
 </script>
+<div id="bugModal" onclick="if(event.target===this)closeBugModal()" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(11,25,41,0.65);align-items:center;justify-content:center;">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">Report a bug</div>
+        <div class="modal-sub">Describe what went wrong</div>
+      </div>
+      <button class="modal-close" onclick="closeBugModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>What happened? *</label>
+        <textarea id="bugDesc" placeholder="e.g. The search bar crashes when I type a long address…" style="min-height:100px;"></textarea>
+      </div>
+      <div class="form-group">
+        <label>Which page?</label>
+        <select id="bugPage">
+          <option value="map">Map (index)</option>
+          <option value="about">About page</option>
+          <option value="admin">Admin panel</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div class="form-actions">
+        <button class="btn-primary" id="bugSubmitBtn" onclick="submitBug()">Submit</button>
+        <button class="btn-sec" onclick="closeBugModal()">Cancel</button>
+        <span class="success-msg" id="bugSuccessMsg">✓ Bug reported — thanks.</span>
+        <span class="error-msg" id="bugErrorMsg"></span>
+      </div>
+    </div>
+  </div>
+</div>
 </body>
 </html>
